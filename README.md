@@ -14,9 +14,9 @@ A paper library in plain text.
 ## Features
 
 - Add papers by arXiv id, DOI, URL or title. Metadata comes from arXiv, Semantic Scholar and Crossref, never from memory.
-- Keep a TL;DR, notes, tags and reading status next to the metadata.
-- Citations between your papers are fetched for you. `builds_on` links record your own view of where an idea came from, and why.
-- A local lineage page lays papers out as generations of ideas. Edit notes, details and links in place, and drag one card onto another to link them.
+- Notes are yours. They sit under the metadata with tags and reading status, and your agent leaves them alone unless you ask.
+- Citations between your papers are fetched for you. `builds_on` links record your own view of where an idea came from.
+- A local lineage page lays papers out as generations of ideas. Edit notes and details in place, and drag one card onto another to link them.
 - BibTeX for any set of papers.
 
 ## Install
@@ -59,8 +59,8 @@ short summary of what you changed.
 |---|---|
 | `pp add <id>... [-s status] [-t tags]` | add papers by arXiv id, DOI, URL or title |
 | `pp ls [-s status] [-t tag]` | list papers |
-| `pp get <field> [key...]` | print `path`, `bib`, `url`, `tldr`, `notes` or any field; all papers if no key |
-| `pp set <key> field=value...` | `status=read`, `tags+=a,b`, `tldr=...`, `notes+=...`, `builds_on.<key>=why` |
+| `pp get <field> [key...]` | print `path`, `bib`, `url`, `notes` or any field; all papers if no key |
+| `pp set <key> field=value...` | `status=read`, `tags+=a,b`, `notes+=...`, `builds_on+=<key>` |
 | `pp mv <key> <new-key>` | rename a paper and every reference to it |
 | `pp link` | fetch citations between your papers and fill in venues |
 | `pp graph [-o file.html]` | serve the editable lineage page, or write a snapshot |
@@ -81,12 +81,10 @@ arxiv: "1706.03762"
 tags: [nlp]
 status: read
 cites: [bahdanau2014neural]
-builds_on:
-  bahdanau2014neural: "attention becomes the whole model"
+builds_on: [bahdanau2014neural]
 ---
 # Attention Is All You Need
 
-## TL;DR
 ## Notes
 ## Abstract
 ```

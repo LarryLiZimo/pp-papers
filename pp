@@ -8,14 +8,14 @@ echo "pp: needs Python 3.9 or newer" >&2; exit 1
 __doc__ = """pp - a plain-text paper library.
 
 Each paper is one Markdown file in $PP_DIR (default ~/papers): YAML front matter
-for metadata, Markdown sections for your notes. Metadata is fetched from arXiv,
+for metadata, Markdown for your notes. Metadata is fetched from arXiv,
 Semantic Scholar and Crossref.
 
 commands:
   add <arxiv-id|doi|url|title>...  fetch metadata, create files, print keys  [-s status] [-t tag,...]
   ls                               list papers as TSV: key year status tags title  [-s status] [-t tag]
-  get <field> [key...]             print path, bib, url, tldr, notes, abstract or any front-matter field
-  set <key> <field=value>...       status=read  tags+=a,b  tags-=a  tldr=...  notes+=...  builds_on.<key>=why
+  get <field> [key...]             print path, bib, url, notes, abstract or any front-matter field
+  set <key> <field=value>...       status=read  tags+=a,b  tags-=a  notes+=...  builds_on+=<key>
   mv <key> <new-key>               rename a paper and every reference to it
   link                             fetch citations between your papers; fill in published venues
   graph                            serve the editable lineage page on 127.0.0.1  [-p port] [--no-open]
@@ -36,14 +36,14 @@ from html import unescape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 LIB = Path(os.environ.get("PP_DIR") or "~/papers").expanduser()
 TODAY = date.today().isoformat()
 STATUSES = ("queue", "reading", "read")
 ORDER = ("title", "authors", "year", "venue", "arxiv", "doi", "s2", "url",
          "tags", "status", "added", "read", "cites", "builds_on")
 TEXT = {"title", "venue", "arxiv", "doi", "s2", "url"}  # never read these as numbers
-SECTIONS = {"tldr": "TL;DR", "notes": "Notes"}  # body sections that `set` creates on demand
+SECTIONS = {"notes": "Notes"}  # body sections that `set` creates on demand
 UA = f"pp/{VERSION} (+https://github.com/LarryLiZimo/pp-papers)"
 S2 = "https://api.semanticscholar.org/graph/v1/paper/"
 S2_FIELDS = "title,authors,year,venue,publicationVenue,externalIds,abstract"
@@ -134,7 +134,7 @@ def split_body(body):  # -> text before the first "## ", [[heading, text], ...]
     return parts[0], [[h, t] for h, t in zip(parts[1::2], parts[2::2])]
 
 
-def section(body, field):  # "tldr" matches "## TL;DR"
+def section(body, field):  # "notes" matches "## Notes"
     return next((t.strip() for h, t in split_body(body)[1] if fold(h) == field), None)
 
 
@@ -180,9 +180,9 @@ def resolve(key, lib):
 def lst(v): return v if isinstance(v, list) else [v] if v else []
 
 
-def builds_on(m):  # {source key: reason}; tolerates a hand-written list
-    bo = m.get("builds_on") or {}
-    return dict.fromkeys(bo, "") if isinstance(bo, list) else bo
+def builds_on(m):  # [source key, ...]; pp 1.0 wrote {source key: reason}
+    bo = m.get("builds_on")
+    return list(bo) if isinstance(bo, dict) else lst(bo)
 
 
 def year(m):
@@ -198,7 +198,7 @@ def url(m):
     return ""
 
 
-def fold(s):  # "Schönberger" -> "schonberger", "TL;DR" -> "tldr"
+def fold(s):  # "Schönberger" -> "schonberger"
     s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode().lower()
     return re.sub(r"[^a-z0-9]", "", s)
 
@@ -365,7 +365,7 @@ def add(q, status, tags, lib):
     meta = {f: rec.get(f) for f in ("title", "authors", "year", "venue", "arxiv", "doi")}
     if not (rec.get("arxiv") or rec.get("doi")): meta["s2"] = rec.get("s2")
     meta.update(tags=list(tags), status=status, added=TODAY, read=TODAY if status == "read" else None)
-    body = f"# {rec['title']}\n\n## TL;DR\n\n\n## Notes\n\n"
+    body = f"# {rec['title']}\n\n## Notes\n\n"
     if rec.get("abstract"): body += f"\n## Abstract\n\n{rec['abstract']}\n"
     save(key, meta, body)
     lib[key] = (meta, body)
@@ -378,24 +378,21 @@ def assign(key, pairs, lib):
     meta, body = lib[key]
     for kv in pairs:
         m = re.fullmatch(r"([\w.]+?)([+-]?)=(.*)", kv, re.S)
-        if not m: die(f"bad assignment '{kv}' (use field=value, tags+=x, notes+=text, builds_on.<key>=why)")
+        if not m: die(f"bad assignment '{kv}' (use field=value, tags+=x, notes+=text, builds_on+=<key>)")
         f, op, v = m[1], m[2], m[3].strip()
-        if f in SECTIONS or section(body, f) is not None:  # a body section: tldr, notes, abstract, ...
+        if f in SECTIONS or section(body, f) is not None:  # a body section: notes, abstract, ...
             if op == "-": die(f"{f}-= is not supported")
             if op == "+":
                 if "\n" not in v and not re.match(r"([-*+>#|]|\d+[.)]\s|```)", v): v = "- " + v
                 v = ((section(body, f) or "") + "\n" + v).strip()
             body = put_section(body, f, v)
-        elif f.startswith("builds_on."):
-            src = resolve(f.split(".", 1)[1], lib)
-            if src == key: die("a paper cannot build on itself")
-            bo = builds_on(meta)
-            if v: bo[src] = v
-            else: bo.pop(src, None)
-            meta["builds_on"] = bo
-        elif f in ("tags", "authors"):
+        elif f in ("tags", "authors", "builds_on"):
             items, cur = [x.strip() for x in v.split(",") if x.strip()], lst(meta.get(f))
-            meta[f] = (cur + [x for x in items if x not in cur] if op == "+"
+            if f == "builds_on":
+                cur = builds_on(meta)
+                items = [x if x in cur else resolve(x, lib) for x in items]  # a stale key can still be removed
+                if key in items: die("a paper cannot build on itself")
+            meta[f] = (list(dict.fromkeys(cur + items)) if op == "+"
                        else [x for x in cur if x not in items] if op == "-" else items)
         else:
             if f == "status" and v not in STATUSES: die(f"status must be one of {', '.join(STATUSES)}")
@@ -412,7 +409,7 @@ def relink(lib, old, new):  # point every reference to `old` at `new`, or drop i
         bo = builds_on(m)
         if old in lst(m.get("cites")) or old in bo:
             m["cites"] = [swap(c) for c in lst(m.get("cites")) if new or c != old]
-            m["builds_on"] = {swap(s): w for s, w in bo.items() if new or s != old}
+            m["builds_on"] = [swap(s) for s in bo if new or s != old]
             save(k, m, body)
 
 
@@ -470,8 +467,7 @@ def graph_data(lib, base=None):
                       "tags": list(map(str, lst(m.get("tags")))), "url": url(m),
                       "arxiv": m.get("arxiv"), "doi": m.get("doi"), "body": body})
         edges += [{"from": c, "to": k, "kind": "cites"} for c in lst(m.get("cites")) if c in lib and c != k]
-        edges += [{"from": c, "to": k, "kind": "builds_on", "why": w or ""}
-                  for c, w in builds_on(m).items() if c in lib and c != k]
+        edges += [{"from": c, "to": k, "kind": "builds_on"} for c in builds_on(m) if c in lib and c != k]
     return {"nodes": nodes, "edges": edges, "base": base}
 
 
@@ -613,8 +609,7 @@ GETTERS = {"path": lambda k, m: str(LIB / f"{k}.md"), "url": lambda k, m: url(m)
 def value(k, meta, body, f):
     if f in GETTERS: return GETTERS[f](k, meta)
     if f in SECTIONS or section(body, f) is not None: return section(body, f) or ""
-    v = meta.get(f)
-    if isinstance(v, dict): return "\n".join(f"{x}\t{y}" for x, y in v.items())
+    v = builds_on(meta) if f == "builds_on" else meta.get(f)
     return ", ".join(map(str, v)) if isinstance(v, list) else "" if v is None else str(v)
 
 
@@ -670,10 +665,10 @@ def main():
     s = sub.add_parser("ls", help="list papers as TSV")
     s.add_argument("-s", "--status", choices=STATUSES)
     s.add_argument("-t", "--tag")
-    s = sub.add_parser("get", help="print a field: path, bib, url, tldr, notes, title, ...")
+    s = sub.add_parser("get", help="print a field: path, bib, url, notes, title, ...")
     s.add_argument("field")
     s.add_argument("keys", nargs="*", metavar="key")
-    s = sub.add_parser("set", help="write fields: status=read tags+=x notes+=text builds_on.<key>=why")
+    s = sub.add_parser("set", help="write fields: status=read tags+=x notes+=text builds_on+=<key>")
     s.add_argument("key")
     s.add_argument("pairs", nargs="+", metavar="field=value")
     s = sub.add_parser("mv", help="rename a paper and every reference to it")

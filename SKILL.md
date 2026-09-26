@@ -1,40 +1,38 @@
 ---
 name: pp
-description: Keep the user's paper library with the `pp` CLI (plain text, one Markdown file per paper). Use whenever the user mentions reading, finishing or wanting to read a paper, shares an arXiv/DOI/paper link to save, wants notes on a paper, asks what they have read on a topic or how papers relate (lineage), or needs BibTeX.
+description: Keep the user's paper library with the `pp` CLI (plain text, one Markdown file per paper). Use whenever the user mentions reading, finishing or wanting to read a paper, shares an arXiv/DOI/paper link to save, asks what they have read or noted on a topic or how papers relate (lineage), or needs BibTeX.
 ---
 
 # Paper library (`pp`)
 
-Every paper is `$PP_DIR/<key>.md` (default `~/papers`): YAML front matter (metadata, links) plus Markdown sections (`## TL;DR`, `## Notes`, `## Abstract`). `pp -h` lists everything.
+Every paper is `$PP_DIR/<key>.md` (default `~/papers`): YAML front matter (metadata, links) plus Markdown (`## Notes`, `## Abstract`). `pp -h` lists everything.
 
 | Command | Does |
 |---|---|
 | `pp add <arxiv-id\|doi\|url\|title>... [-s queue\|reading\|read] [-t a,b]` | fetch metadata, create files, print keys (title and venue on stderr) |
 | `pp ls [-s status] [-t tag]` | TSV: key, year, status, tags, title (key order; pipe to `sort` / `grep`) |
-| `pp get <field> [key...]` | read `path`, `bib`, `url`, `tldr`, `notes`, `abstract`, `title`, `builds_on`, any field; no key = all papers |
-| `pp set <key> field=value...` | write fields and sections (below); `-` as a value reads stdin |
+| `pp get <field> [key...]` | read `path`, `bib`, `url`, `notes`, `abstract`, `title`, `builds_on`, any field; no key = all papers |
+| `pp set <key> field=value...` | write fields (below); `-` as a value reads stdin |
 | `pp mv <key> <new-key>` | rename; references in other papers follow |
 | `pp link` | fetch citations between library papers; fill in published venue and year |
 | `pp graph` | serve the editable lineage page (blocks until Ctrl+C) |
 
-`set` forms: `status=read` (stamps the read date), `tags+=a,b`, `tags-=a`, `tldr="one sentence"`, `notes+="one bullet"` (appends; a bare line becomes `- line`), `notes=-` (replace from stdin), `builds_on.<key>="why"` (an empty value removes the link), `year=2017 venue=CVPR`.
+`set` forms: `status=read` (stamps the read date), `tags+=a,b`, `tags-=a`, `builds_on+=<key>,<key>`, `builds_on-=<key>`, `year=2017 venue=CVPR`, `notes+="a line"` (appends; a bare line becomes `- line`), `notes=-` (replace from stdin).
 
 ## Rules
 
 - **Never write title, authors, year or venue from memory.** Find the arXiv id or DOI (search the web if needed), let `pp add` fetch the metadata, and check that the title it prints is the paper the user meant.
-- **Notes are the user's voice.** Record what *they* said or thought, in their language, as terse bullets via `notes+=`. No generic summaries; if they gave no takeaway, ask. You may write `tldr`: one sentence on what the paper claims, grounded in its abstract (`pp get abstract <key>`).
-- **`builds_on` is a claim about ideas**: only between papers in the library, one short reason each ("adds X to Y", "replaces A with B"), grounded in the abstracts. Propose links and let the user confirm, unless they told you the relation.
+- **Notes belong to the user.** Never write, summarize into or tidy `## Notes` on your own, including after "I read X". Write there only when the user asks you to, in their words. Reading notes to answer a question is fine.
+- **`builds_on` says one paper's idea comes from another**, both in the library. Ground it in the abstracts (`pp get abstract <key>`); propose links and add them once the user agrees, unless they told you the relation.
 - **`cites` is machine-managed** by `pp link`. Don't edit it.
 - **Keys** (`qi2017pointnet`) are permanent IDs; commands accept any unique prefix or substring of a key or title (`vggt`, `mast3r`). Auto keys use the title's first word, so when a paper is known by another name (VGGSfM, MASt3R), rename it right after adding: `pp mv wang2024visual wang2024vggsfm`.
-- Change files through `pp set`, not by hand, so the format stays parseable. The user may be editing the same paper in the lineage page; re-read with `pp get` before replacing a whole section.
+- Change files through `pp set`, not by hand, so the format stays parseable.
 
 ## "I read / finished X"
 
 1. `pp add <id> -s read [-t tags]`. If it says "already in library": `pp set <key> status=read`.
-2. `pp set <key> tldr="..."`, grounded in the abstract.
-3. Record the user's takeaways: `pp set <key> notes+="..."` per bullet, or `notes=-` with a heredoc. If they keep a longer write-up elsewhere, add a bullet linking it (`[write-up](../path/to/file.md)`, relative to the library folder, or an absolute path).
-4. `pp ls`, compare with the library (`pp get tldr` helps), and propose `builds_on` links in both directions: `pp set <key> builds_on.<older>="why"` / `pp set <newer> builds_on.<key>="why"`.
-5. `pp link`. If it prints a `pp mv` hint (Semantic Scholar corrected the year in a key), apply it. An open lineage page picks up every change by itself.
+2. `pp ls`, compare with the library, and propose `builds_on` links in both directions: `pp set <key> builds_on+=<older>` / `pp set <newer> builds_on+=<key>`.
+3. `pp link`. If it prints a `pp mv` hint (Semantic Scholar corrected the year in a key), apply it. An open lineage page picks up every change by itself.
 
 ## Other requests
 
@@ -42,8 +40,9 @@ Every paper is `$PP_DIR/<key>.md` (default `~/papers`): YAML front matter (metad
 |---|---|
 | Save for later | `pp add <id> -s queue` |
 | Started reading | `pp set <key> status=reading` |
+| "Note that ..." about a paper | `pp set <key> notes+="..."` in their words. The user may be editing the same notes in the page, so `pp get notes <key>` first before replacing them with `notes=-`. |
 | What have I read on X / where did I note X | `grep -ril "X" "${PP_DIR:-$HOME/papers}"`, then `pp get notes <keys>`; `pp ls -s read`, `pp ls -t <tag>` |
-| See or edit the lineage | Tell the user to run `pp graph`. It blocks, so don't run it in the foreground yourself; if asked, run it in the background. The page edits status, details, TL;DR and notes, adds, deletes and links papers (drag a card's dot onto another card), and lets cards be dragged around. |
+| See or edit the lineage | Tell the user to run `pp graph`. It blocks, so don't run it in the foreground yourself; if asked, run it in the background. The page edits status, details and notes, adds, deletes and links papers (drag a card's dot onto another card: the older paper becomes the source, and Flip reverses it), and lets cards be dragged around. |
 | BibTeX | `pp get bib <key>...`, or `pp get bib > refs.bib` for everything |
 
 ## When metadata is off

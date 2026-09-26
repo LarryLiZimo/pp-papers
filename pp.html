@@ -120,9 +120,6 @@ aside h3 { display: flex; align-items: baseline; justify-content: space-between;
 .rel li { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; padding: 6px 0; border-top: 1px solid var(--line); }
 .rel li:first-child { border-top: 0; }
 .rel .yr { margin-left: 6px; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
-.rel .why { display: block; color: var(--muted); font-size: 13px; }
-.rel .why[data-act] { cursor: text; border-radius: 4px; }
-.rel .why[data-act]:hover { color: var(--ink); background: var(--bg); }
 .x { align-self: start; border: 0; background: none; padding: 0 2px; color: var(--faint); font-size: 17px; line-height: 1.2; cursor: pointer; }
 .x:hover { color: var(--danger); }
 .notes p, .notes ul, .notes ol, .notes blockquote { margin: 6px 0; }
@@ -289,7 +286,6 @@ function build(data) {
   }
   edges.forEach(e => {
     e.el = el('path', {class: e.kind === 'builds_on' ? 'edge bo' : 'edge', d: curve(e)}, $('#edges'));
-    if (e.why) el('title', {}, e.el).textContent = e.why;
   });
   nodes.forEach(n => {
     const g = n.el = el('g', {class: 'node ' + n.status}, $('#nodes'));
@@ -495,13 +491,13 @@ function md(src) {
 function sections(n) {  // [[heading, field, text], ...] of the markdown body
   const p = n.body.replace(/^\s*# .*\n?/, '').split(/^## +(.*)$/m), out = [];
   for (let i = 1; i < p.length; i += 2) out.push([p[i].trim(), fold(p[i]), (p[i + 1] || '').trim()]);
-  if (EDIT) for (const [f, h] of [['tldr', 'TL;DR'], ['notes', 'Notes']]) {  // always offer these two
+  if (EDIT && !out.some(s => s[1] === 'notes')) {  // always offer a Notes section
     const i = out.findIndex(s => s[1] === 'abstract');
-    if (!out.some(s => s[1] === f)) out.splice(i < 0 ? out.length : i, 0, [h, f, '']);
+    out.splice(i < 0 ? out.length : i, 0, ['Notes', 'notes', '']);
   }
   return [p[0].trim(), out];
 }
-function notes(n) {
+function notes(n) {  // -> [html of the notes, html of the abstract]
   const [lead, secs] = sections(n);
   let html = md(lead), abstract = '', any = false;
   for (const [h, f, c] of secs) {
@@ -513,22 +509,19 @@ function notes(n) {
       : `<p class="placeholder" data-act="edit" data-field="${esc(f)}">Add ${esc(h)}…</p>`}</section>`;
   }
   if (!any && !EDIT) html = `<p class="empty">No notes yet. <code>pp set ${esc(n.id)} notes+="…"</code></p>`;
-  return html + abstract;
+  return [html, abstract];
 }
 function show(n, {keep = false} = {}) {
   const top = panel.scrollTop;
   sel = n || null; selId = sel && sel.id;
   history.replaceState(null, '', n ? '#' + n.id : location.pathname + location.search);
   if (!n) { panel.classList.remove('open'); return update(); }
-  const bo = (e, other) => {
-    const act = EDIT ? ` data-act="why" data-from="${esc(e.a.id)}" data-to="${esc(e.b.id)}"` : '';
-    const why = e.why || (EDIT ? '<i>add a reason</i>' : '');
-    return item(other, why ? `<span class="why"${act}>${e.why ? esc(e.why) : why}</span>` : '',
-      EDIT ? `<button class="x" data-act="unlink" data-from="${esc(e.a.id)}" data-to="${esc(e.b.id)}" title="Remove this link">&times;</button>` : '');
-  };
+  const bo = (e, other) => item(other, '',
+    EDIT ? `<button class="x" data-act="unlink" data-from="${esc(e.a.id)}" data-to="${esc(e.b.id)}" title="Remove this link">&times;</button>` : '');
   const item = (m, extra = '', x = '') => `<li><div><a href="#${esc(m.id)}" data-go="${esc(m.id)}">${esc(m.title)}</a><span class="yr">${esc(m.year || '')}</span>${extra}</div>${x}</li>`;
   const sec = (title, list, action = '') => list.length || action ? `<h3>${title}${action}</h3><ul>${list.join('')}</ul>` : '';
   const kind = (es, k) => es.filter(e => e.kind === k);
+  const [text, abstract] = notes(n);
   const authors = n.authors.length > 8 ? n.authors.slice(0, 8).join(', ') + `, +${n.authors.length - 8}` : n.authors.join(', ');
   const status = EDIT
     ? `<div class="seg small" role="group" aria-label="Status">${['queue', 'reading', 'read'].map(s =>
@@ -540,8 +533,9 @@ function show(n, {keep = false} = {}) {
     <h2>${esc(n.title)}</h2>
     <div class="authors">${esc(authors)}</div>
     <div class="links">${n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">${n.arxiv ? 'arXiv' : n.doi ? 'DOI' : 'Link'} &#8599;</a>` : ''}<code>${esc(n.id)}</code>${n.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}${EDIT ? '<button class="link-btn" data-act="details">Edit details</button>' : ''}</div>
+    <div class="notes">${text}</div>
     <div class="rel">${sec('Builds on', kind(n.in, 'builds_on').map(e => bo(e, e.a)), EDIT ? '<button class="link-btn" data-act="add-link">+ Add</button>' : '')}${sec('Built upon by', kind(n.out, 'builds_on').map(e => bo(e, e.b)))}${sec('Cites', kind(n.in, 'cites').map(e => item(e.a)))}${sec('Cited by', kind(n.out, 'cites').map(e => item(e.b)))}</div>
-    <div class="notes">${notes(n)}</div>
+    ${abstract ? `<div class="notes">${abstract}</div>` : ''}
     ${EDIT ? '<div class="danger-zone"><button class="btn danger" data-act="delete">Delete paper</button></div>' : ''}`;
   panel.classList.add('open');
   panel.scrollTop = keep ? top : 0;
@@ -563,7 +557,6 @@ panel.addEventListener('click', e => {
   else if (d.act === 'save') saveSection(n, d.field);
   else if (d.act === 'details') editDetails(n);
   else if (d.act === 'add-link') addLink(n);
-  else if (d.act === 'why') linkPapers(from, to);
   else if (d.act === 'unlink') unlink(from, to);
   else if (d.act === 'delete') remove(n);
 });
@@ -587,14 +580,14 @@ async function api(op, body = {}) {
   } finally { document.body.classList.remove('busy'); }
 }
 let toastTimer = 0;
-function toast(msg, {error = false, action, onAction} = {}) {
+function toast(msg, {error = false, actions = []} = {}) {  // actions: [[label, fn], ...]
   const t = $('#toast');
   t.className = error ? 'error' : '';
-  t.innerHTML = `<span>${esc(msg)}</span>` + (action ? `<button>${esc(action)}</button>` : '');
-  if (action) t.querySelector('button').onclick = () => { t.hidden = true; onAction(); };
+  t.innerHTML = `<span>${esc(msg)}</span>` + actions.map(([label]) => `<button>${esc(label)}</button>`).join('');
+  t.querySelectorAll('button').forEach((b, i) => b.onclick = () => { t.hidden = true; actions[i][1](); });
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.hidden = true, error ? 9000 : action ? 7000 : 4000);
+  toastTimer = setTimeout(() => t.hidden = true, error ? 9000 : actions.length ? 7000 : 4000);
 }
 function ask({title, text = '', fields = [], ok = 'Save', danger = false}) {
   const d = $('#dlg');
@@ -659,37 +652,30 @@ async function editDetails(n) {
     if (await api('mv', {key: n.id, new: key}) && p[n.id]) { p[key] = p[n.id]; delete p[n.id]; storePos(p); }
   }
 }
-async function linkPapers(a, b) {  // drag from a onto b, or edit an existing reason
-  const short = m => m.title.length > 48 ? m.title.slice(0, 46) + '…' : m.title;
-  const old = [...b.in, ...a.in].find(e => e.kind === 'builds_on' && (e.a === a && e.b === b || e.a === b && e.b === a));
-  const newerFirst = old ? old.b === a : (a.year || 0) > (b.year || 0);
-  const v = await ask({title: old ? 'Edit link' : 'New lineage link', ok: old ? 'Save' : 'Link', fields: [
-    {name: 'dir', label: 'Direction', value: newerFirst ? 'ab' : 'ba', options: [
-      ['ba', `“${short(b)}” builds on “${short(a)}”`], ['ab', `“${short(a)}” builds on “${short(b)}”`]]},
-    {name: 'why', label: 'Why? One short reason', value: old?.why || '', required: true,
-     placeholder: 'adds X to Y · replaces A with B'}]});
-  if (!v) return;
-  const [src, dst] = v.dir === 'ba' ? [a, b] : [b, a];
-  const pairs = [`builds_on.${src.id}=${v.why.trim()}`];
-  if (old && old.b !== dst) {  // direction flipped: drop the old link first
-    await api('set', {key: old.b.id, pairs: [`builds_on.${old.a.id}=`]});
-  }
-  api('set', {key: dst.id, pairs});
+const short = m => m.title.length > 48 ? m.title.slice(0, 46) + '…' : m.title;
+async function linkPapers(a, b) {  // a was dragged onto b: the older one is the source, or else a
+  const old = edges.find(e => e.kind === 'builds_on' && (e.a === a && e.b === b || e.a === b && e.b === a));
+  const [src, dst] = old ? [old.a, old.b] : (a.year || 0) > (b.year || 0) ? [b, a] : [a, b];
+  if (!old && !await api('set', {key: dst.id, pairs: [`builds_on+=${src.id}`]})) return;
+  toast(`${old ? 'Already linked' : 'Linked'}: “${short(dst)}” builds on “${short(src)}”`, {actions: [
+    ['Flip', () => flip(src.id, dst.id)],
+    ...old ? [] : [['Undo', () => api('set', {key: dst.id, pairs: [`builds_on-=${src.id}`]})]]]});
+}
+async function flip(src, dst) {  // "dst builds on src" becomes "src builds on dst"
+  if (await api('set', {key: dst, pairs: [`builds_on-=${src}`]})) api('set', {key: src, pairs: [`builds_on+=${dst}`]});
 }
 async function addLink(n) {
   const taken = new Set(n.in.filter(e => e.kind === 'builds_on').map(e => e.a));
   const others = nodes.filter(m => m !== n && !taken.has(m)).sort((a, b) => a.title.localeCompare(b.title));
   if (!others.length) return toast('No other papers to link to.');
   const v = await ask({title: 'This paper builds on…', ok: 'Link', fields: [
-    {name: 'src', label: 'Paper', options: others.map(m => [m.id, `${m.title}${where(m) ? ` (${where(m)})` : ''}`])},
-    {name: 'why', label: 'Why? One short reason', required: true, placeholder: 'adds X to Y · replaces A with B'}]});
-  if (v) api('set', {key: n.id, pairs: [`builds_on.${v.src}=${v.why.trim()}`]});
+    {name: 'src', label: 'Paper', options: others.map(m => [m.id, `${m.title}${where(m) ? ` (${where(m)})` : ''}`])}]});
+  if (v) api('set', {key: n.id, pairs: [`builds_on+=${v.src}`]});
 }
 async function unlink(a, b) {
-  const why = b.in.find(e => e.kind === 'builds_on' && e.a === a)?.why || '?';
-  if (await api('set', {key: b.id, pairs: [`builds_on.${a.id}=`]}))
-    toast(`Removed: “${b.title}” builds on “${a.title}”`, {action: 'Undo',
-      onAction: () => api('set', {key: b.id, pairs: [`builds_on.${a.id}=${why}`]})});
+  if (await api('set', {key: b.id, pairs: [`builds_on-=${a.id}`]}))
+    toast(`Removed: “${short(b)}” builds on “${short(a)}”`, {actions: [
+      ['Undo', () => api('set', {key: b.id, pairs: [`builds_on+=${a.id}`]})]]});
 }
 async function remove(n) {
   const ok = await ask({title: 'Delete this paper?', ok: 'Delete', danger: true,

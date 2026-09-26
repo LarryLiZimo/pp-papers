@@ -27,14 +27,14 @@ S2_POINTNET = {"paperId": "d997", "title": "PointNet", "year": 2016, "abstract":
 
 def paper(key, title, year=2020, body="", **meta):
     pp.save(key, {"title": title, "authors": ["Ada Lovelace"], "year": year, "tags": [], "status": "queue", **meta},
-            f"# {title}\n\n## TL;DR\n\n\n## Notes\n\n{body}\n## Abstract\n\nAn abstract.\n")
+            f"# {title}\n\n## Notes\n\n{body}\n## Abstract\n\nAn abstract.\n")
 
 
 def reset():
     shutil.rmtree(pp.LIB, ignore_errors=True)
     paper("old2016base", "Base Method", 2016)
     paper("new2020next", "Next Method: Better", 2020, cites=["old2016base"],
-          builds_on={"old2016base": "adds X to the base"}, body="- see [write-up](../write-up.md)\n")
+          builds_on=["old2016base"], body="- see [write-up](../write-up.md)\n")
     (TMP / "write-up.md").write_text("my write-up", encoding="utf-8")
     (TMP / "secret.txt").write_text("not linked", encoding="utf-8")
 
@@ -47,9 +47,9 @@ def run(fn, **kw):
 
 class Format(unittest.TestCase):
     def test_roundtrip(self):
-        meta = {"title": "A: B #1", "authors": ["Charles R. Qi", "O'Brien, Jr."], "year": 2017, "venue": "CVPR",
+        meta = {"title": "A: B #1", "authors": ["Charles R. Qi", "O'Brien, Jr."], "year": 2017, "venue": "会议: # not a comment",
                 "arxiv": "2001.01230", "doi": "10.1109/CVPR.2017.16", "tags": [], "status": "read",
-                "read": "2026-09-25", "cites": ["x2016y"], "builds_on": {"x2016y": "把 A 变成 B: # not a comment"}}
+                "read": "2026-09-25", "cites": ["x2016y"], "builds_on": ["x2016y"]}
         self.assertEqual(pp.parse(pp.dump(meta, "# T\n\nbody\n")), (meta, "# T\n\nbody\n"))
 
     def test_hand_written_yaml(self):
@@ -117,9 +117,8 @@ class Library(unittest.TestCase):
 
     def test_sections(self):
         lib = pp.papers()
-        pp.assign("old2016base", ["tldr=One line.", "notes+=first", "notes+=- second", "notes+=third"], lib)
+        pp.assign("old2016base", ["notes+=first", "notes+=- second", "notes+=third"], lib)
         body = pp.papers()["old2016base"][1]
-        self.assertEqual(pp.section(body, "tldr"), "One line.")
         self.assertEqual(pp.section(body, "notes"), "- first\n- second\n- third")
         self.assertEqual(pp.section(body, "abstract"), "An abstract.")
         pp.assign("old2016base", ["notes="], lib)
@@ -132,20 +131,22 @@ class Library(unittest.TestCase):
         self.assertEqual((m["tags"], m["status"], m["read"], m["year"]), (["b", "c"], "read", pp.TODAY, 2017))
         self.assertTrue(body.startswith("# Renamed\n"))
         self.assertRaises(pp.Fail, pp.assign, "old2016base", ["status=done"], lib)
-        self.assertRaises(pp.Fail, pp.assign, "old2016base", ["builds_on.old=self"], lib)
+        self.assertRaises(pp.Fail, pp.assign, "old2016base", ["builds_on+=old"], lib)
 
     def test_builds_on(self):
         lib = pp.papers()
-        pp.assign("new2020next", ["builds_on.old=new reason"], lib)
-        self.assertEqual(pp.papers()["new2020next"][0]["builds_on"], {"old2016base": "new reason"})
-        pp.assign("new2020next", ["builds_on.old="], lib)
+        pp.assign("new2020next", ["builds_on-=old"], lib)
         self.assertNotIn("builds_on", pp.papers()["new2020next"][0])
+        pp.assign("new2020next", ["builds_on+=old,old2016base"], lib)
+        self.assertEqual(pp.papers()["new2020next"][0]["builds_on"], ["old2016base"])
+        paper("mid2018v1", "Written by pp 1.0", 2018, builds_on={"old2016base": "a reason"})  # the 1.0 format
+        self.assertEqual(pp.builds_on(pp.papers()["mid2018v1"][0]), ["old2016base"])
 
     def test_rename_and_remove(self):
         lib = pp.papers()
         pp.rename("old2016base", "old2017base", lib)
         m = pp.papers()["new2020next"][0]
-        self.assertEqual((m["cites"], m["builds_on"]), (["old2017base"], {"old2017base": "adds X to the base"}))
+        self.assertEqual((m["cites"], m["builds_on"]), (["old2017base"], ["old2017base"]))
         pp.remove("old2017base", lib)
         self.assertEqual(list(pp.papers()), ["new2020next"])
         self.assertFalse({"cites", "builds_on"} & set(pp.papers()["new2020next"][0]))
