@@ -1,0 +1,8 @@
+{
+  "name": "pp-papers",
+  "description": "pp, a plain-text paper library",
+  "owner": { "name": "LarryLiZimo", "url": "https://github.com/LarryLiZimo" },
+  "plugins": [
+    { "name": "pp", "source": "./", "description": "A plain-text paper library your agent keeps for you" }
+  ]
+}

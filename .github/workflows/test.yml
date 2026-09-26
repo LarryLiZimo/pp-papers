@@ -18,3 +18,5 @@ jobs:
       - run: python test.py
       - run: ./pp --version
         shell: bash
+      - run: python -m pip install . && pp --version
+        shell: bash

@@ -1,0 +1,10 @@
+{
+  "name": "pp",
+  "displayName": "pp: plain-text paper library",
+  "description": "Keep your paper library as one Markdown file per paper: add papers by arXiv id or DOI, keep notes, link lineages, export BibTeX.",
+  "author": { "name": "LarryLiZimo", "url": "https://github.com/LarryLiZimo" },
+  "homepage": "https://github.com/LarryLiZimo/pp-papers",
+  "repository": "https://github.com/LarryLiZimo/pp-papers",
+  "license": "MIT",
+  "keywords": ["papers", "research", "arxiv", "bibtex", "markdown", "reference-manager"]
+}
