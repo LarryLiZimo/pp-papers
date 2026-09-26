@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper Lineage</title>
+<style>
+:root {
+  --bg: #f6f5f1; --surface: #fffefb; --ink: #1f1e1b; --muted: #6f6c64; --faint: #a8a49a;
+  --line: #e2dfd6; --grid: #e7e4dc; --accent: #2459c6; --accent-soft: #e6ecf8; --on-accent: #ffffff;
+  --reading: #b26b00; --queue: #a8a49a; --edge: #bdb9ae; --danger: #b93a2b;
+  --shadow: 0 1px 2px rgba(30,25,15,.06), 0 8px 28px rgba(30,25,15,.09);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141413; --surface: #1d1c1a; --ink: #ebe9e3; --muted: #a29f97; --faint: #6c6962;
+    --line: #302f2c; --grid: #22211f; --accent: #7ea6ff; --accent-soft: #1c2740; --on-accent: #0d1424;
+    --reading: #e6a347; --queue: #6c6962; --edge: #4d4b46; --danger: #ff8a7a;
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 8px 28px rgba(0,0,0,.4);
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink); overflow: hidden;
+  font: 14px/1.55 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+body.busy, body.busy * { cursor: progress !important; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.btn { padding: 5px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--faint); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.danger { color: var(--danger); }
+.btn.danger-fill { background: var(--danger); border-color: var(--danger); color: var(--surface); font-weight: 600; }
+.link-btn { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px;
+  font-weight: 500; letter-spacing: 0; text-transform: none; }
+.link-btn:hover { text-decoration: underline; }
+
+header { position: fixed; top: 0; left: 0; right: 0; z-index: 3; display: flex; align-items: center;
+  flex-wrap: wrap; gap: 8px 12px; padding: 10px 16px; border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(10px); }
+h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+.count { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.grow { flex: 1; }
+#q { width: 240px; max-width: 100%; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); outline: none; }
+#q:focus { border-color: var(--accent); }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { display: flex; align-items: center; gap: 6px; border: 0; background: none; padding: 5px 10px;
+  cursor: pointer; color: var(--faint); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed=true] { color: var(--ink); background: var(--accent-soft); }
+.seg.small { display: inline-flex; }
+.seg.small button { padding: 2px 10px; font-size: 12px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.dot.reading { background: var(--reading); }
+.dot.queue { background: none; border: 1.5px dashed var(--queue); }
+select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+
+#canvas { position: fixed; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; user-select: none; }
+#canvas.dragging { cursor: grabbing; }
+.year { fill: var(--muted); font-size: 13px; font-weight: 600; text-anchor: end; }
+.gridline { stroke: var(--grid); stroke-width: 1; }
+.edge { fill: none; stroke: var(--edge); stroke-width: 1.3; stroke-dasharray: 4 4; transition: opacity .15s; }
+.edge.bo { stroke: var(--accent); stroke-width: 2; stroke-dasharray: none; marker-end: url(#arrow); }
+.ghost { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 4; pointer-events: none; marker-end: url(#arrow); }
+.arrowhead { fill: var(--accent); }
+.node { cursor: pointer; transition: opacity .15s; }
+.node .card { fill: var(--surface); stroke: var(--line); }
+.node:hover .card { stroke: var(--faint); }
+.node .bar { fill: var(--accent); }
+.node.reading .bar { fill: var(--reading); }
+.node.queue .bar { fill: var(--queue); }
+.node.queue .card { stroke: var(--faint); stroke-dasharray: 4 3; }
+.node.sel .card { stroke: var(--accent); stroke-width: 2; stroke-dasharray: none; }
+.node.drop .card { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 5 3; }
+.node .c { height: 100%; padding: 6px 10px 6px 16px; display: flex; flex-direction: column; justify-content: center; }
+.node .t { flex-shrink: 0; font-size: 12.5px; font-weight: 600; line-height: 1.3; overflow: hidden; padding-bottom: 2px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.node.queue .t { color: var(--muted); font-weight: 500; }
+.node .m { margin-top: 1px; font-size: 11px; line-height: 1.3; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.handle { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; cursor: crosshair; opacity: 0; transition: opacity .12s; }
+.node:hover .handle, .node.sel .handle { opacity: 1; }
+.dim { opacity: .12; }
+
+.dock { position: fixed; left: 16px; bottom: 16px; z-index: 2; display: flex; align-items: center; gap: 12px;
+  padding: 5px 6px 5px 5px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+  font-size: 12px; color: var(--muted); }
+.dock button { min-width: 30px; height: 28px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); cursor: pointer; }
+.dock .sw { display: inline-flex; align-items: center; gap: 6px; }
+.dock .sw:last-child { padding-right: 6px; }
+
+aside { position: fixed; z-index: 4; top: var(--header, 0px); right: 0; bottom: 0; width: min(440px, 100%); overflow-y: auto;
+  padding: 18px 22px 48px; background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow);
+  transform: translateX(105%); transition: transform .2s ease; }
+aside.open { transform: none; }
+@media (max-width: 720px) {
+  aside { top: auto; left: 0; width: 100%; height: 62vh; border-left: 0; border-top: 1px solid var(--line);
+    border-radius: 14px 14px 0 0; transform: translateY(105%); }
+  #q { width: 100%; order: 9; }
+}
+.close { float: right; width: 30px; height: 30px; margin: -4px -8px 0 8px; border: 0; border-radius: 8px;
+  background: none; color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; }
+.close:hover { background: var(--bg); }
+.kicker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.pill { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 650; color: var(--accent); background: var(--accent-soft); }
+.pill.reading { color: var(--reading); background: color-mix(in srgb, var(--reading) 14%, transparent); }
+.pill.queue { color: var(--muted); background: color-mix(in srgb, var(--queue) 20%, transparent); }
+aside h2 { margin: 8px 0 6px; font-size: 18px; line-height: 1.3; letter-spacing: -.01em; }
+.authors { color: var(--muted); font-size: 13px; }
+.links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 10px 0 4px; font-size: 13px; }
+code { padding: 1px 5px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg);
+  font: 12px/1.4 ui-monospace, "Cascadia Code", Consolas, monospace; }
+.tag { color: var(--muted); font-size: 12px; }
+.tag::before { content: "#"; opacity: .6; }
+aside h3 { display: flex; align-items: baseline; justify-content: space-between; margin: 22px 0 6px;
+  font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.rel ul { margin: 0; padding: 0; list-style: none; }
+.rel li { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.rel li:first-child { border-top: 0; }
+.rel .yr { margin-left: 6px; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.rel .why { display: block; color: var(--muted); font-size: 13px; }
+.rel .why[data-act] { cursor: text; border-radius: 4px; }
+.rel .why[data-act]:hover { color: var(--ink); background: var(--bg); }
+.x { align-self: start; border: 0; background: none; padding: 0 2px; color: var(--faint); font-size: 17px; line-height: 1.2; cursor: pointer; }
+.x:hover { color: var(--danger); }
+.notes p, .notes ul, .notes ol, .notes blockquote { margin: 6px 0; }
+.notes ul, .notes ol { padding-left: 20px; }
+.notes h4, .notes h5, .notes h6 { margin: 14px 0 4px; font-size: 13px; }
+.notes blockquote { padding-left: 10px; border-left: 3px solid var(--line); color: var(--muted); }
+.notes pre { overflow-x: auto; padding: 8px 10px; border-radius: 8px; background: var(--bg); }
+.notes pre code { padding: 0; border: 0; }
+.notes details { margin-top: 22px; padding-top: 10px; border-top: 1px solid var(--line); }
+.notes summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.placeholder { color: var(--faint); font-style: italic; cursor: pointer; }
+.placeholder:hover { color: var(--muted); }
+.editor textarea { display: block; width: 100%; min-height: 110px; resize: vertical; padding: 8px 10px;
+  border: 1px solid var(--accent); border-radius: 8px; background: var(--bg); outline: none;
+  font: 13px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; }
+.editor .row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.hint { margin-right: auto; color: var(--faint); font-size: 12px; }
+.danger-zone { margin-top: 30px; padding-top: 14px; border-top: 1px solid var(--line); }
+mark { color: inherit; background: color-mix(in srgb, var(--reading) 30%, transparent); }
+.empty { color: var(--muted); }
+#empty { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; pointer-events: none; }
+#empty > div { pointer-events: auto; }
+
+dialog { width: min(460px, calc(100% - 32px)); max-height: 90vh; padding: 18px 20px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+dialog::backdrop { background: rgba(0,0,0,.35); }
+dialog h4 { margin: 0 0 6px; font-size: 15px; }
+dialog p { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
+dialog label { display: block; margin: 12px 0 4px; color: var(--muted); font-size: 12px; }
+dialog input, dialog select { width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+dialog input:focus, dialog select:focus { outline: none; border-color: var(--accent); }
+dialog menu { display: flex; justify-content: flex-end; gap: 8px; margin: 18px 0 0; padding: 0; }
+#toast { position: fixed; left: 50%; bottom: 20px; z-index: 10; transform: translateX(-50%); display: flex; align-items: center; gap: 12px;
+  max-width: min(600px, calc(100% - 32px)); padding: 9px 14px; border-radius: 10px; background: var(--ink); color: var(--bg);
+  font-size: 13px; white-space: pre-line; box-shadow: var(--shadow); }
+#toast.error { background: var(--danger); color: var(--surface); }
+#toast button { border: 0; background: none; color: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Paper lineage</h1>
+  <span class="count" id="count"></span>
+  <span class="grow"></span>
+  <input id="q" type="search" placeholder="Search titles, authors, notes  ( / )" autocomplete="off">
+  <div class="seg" id="status">
+    <button data-s="read" aria-pressed="true"><i class="dot"></i>Read</button>
+    <button data-s="reading" aria-pressed="true"><i class="dot reading"></i>Reading</button>
+    <button data-s="queue" aria-pressed="true"><i class="dot queue"></i>Queue</button>
+  </div>
+  <select id="tag" aria-label="Tag"><option value="">All tags</option></select>
+  <button class="btn" id="relink" title="Refresh citation links and venues from Semantic Scholar" hidden>&#8635; Citations</button>
+  <button class="btn primary" id="add" hidden>+ Add paper</button>
+</header>
+<svg id="canvas">
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto"><path class="arrowhead" d="M0,1 L9,5 L0,9 z"/></marker></defs>
+  <g id="world"><g id="grid"></g><g id="edges"></g><g id="nodes"></g><path id="ghost" class="ghost" style="display:none"/></g>
+</svg>
+<div class="dock">
+  <button id="zout" aria-label="Zoom out">&minus;</button><button id="zfit">Fit</button><button id="zin" aria-label="Zoom in">+</button>
+  <button id="reset" title="Forget dragged card positions" hidden>Reset layout</button>
+  <span class="sw"><svg width="26" height="8"><path d="M1 4H25" class="edge bo" style="marker-end:none"/></svg>builds on</span>
+  <span class="sw"><svg width="26" height="8"><path d="M1 4H25" class="edge"/></svg>cites</span>
+  <span class="sw" id="draghint" hidden><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" class="handle" style="opacity:1"/></svg>drag onto a paper to link</span>
+</div>
+<aside id="panel"></aside>
+<div id="empty" hidden><div>No papers yet.<br><code>pp add &lt;arxiv-id | doi | title&gt;</code></div></div>
+<dialog id="dlg"><form method="dialog"><h4></h4><div class="dlg-body"></div>
+  <menu><button type="button" class="btn" value="cancel">Cancel</button><button class="btn primary" value="ok">Save</button></menu></form></dialog>
+<div id="toast" hidden></div>
+<script>
+let DATA = /*DATA*/null;
+const W = 220, H = 64, GX = 26, GY = 18, BAND_GAP = 66, PER_ROW = 5, NS = 'http://www.w3.org/2000/svg';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.appendChild(e); return e; };
+const fold = s => s.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const plural = (k, w) => `${k} ${w}${k === 1 ? '' : 's'}`;
+const surname = n => n.authors[0] ? n.authors[0].split(' ').pop() + (n.authors.length > 1 ? ' et al.' : '') : '';
+const where = n => [n.venue, n.year].filter(Boolean).join(' ');
+const svg = $('#canvas'), world = $('#world'), panel = $('#panel'), q = $('#q'), ghost = $('#ghost');
+const EDIT = !!DATA.editable;
+document.body.classList.toggle('editable', EDIT);
+$('#add').hidden = $('#relink').hidden = $('#draghint').hidden = !EDIT;
+const headerHeight = () => document.documentElement.style.setProperty('--header', $('header').offsetHeight + 'px');
+headerHeight(); addEventListener('resize', headerHeight);  // the panel opens below the toolbar
+
+// ---- dragged card positions live in this browser only
+const POS = 'pp.pos';
+const loadPos = () => { try { return JSON.parse(localStorage.getItem(POS)) || {}; } catch { return {}; } };
+const storePos = p => { try { localStorage.setItem(POS, JSON.stringify(p)); } catch {} $('#reset').hidden = !Object.keys(p).length; };
+
+// ---- build: data -> graph, layout, drawing. Runs again after every edit.
+let nodes = [], edges = [], byId = {}, X0 = 0, X1 = 0, Y0 = 0, Y1 = 0, selId = decodeURIComponent(location.hash.slice(1)) || null;
+function build(data) {
+  DATA = {...DATA, ...data};
+  nodes = DATA.nodes; byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+  const curated = new Set(DATA.edges.filter(e => e.kind === 'builds_on').map(e => e.from + '>' + e.to));
+  edges = DATA.edges.filter(e => e.kind === 'builds_on' || !curated.has(e.from + '>' + e.to));
+  nodes.forEach(n => { n.in = []; n.out = []; n.hay = [n.id, n.title, n.venue, n.year, ...n.authors, ...n.tags, n.body].join(' ').toLowerCase(); });
+  edges.forEach(e => { e.a = byId[e.from]; e.b = byId[e.to]; e.a.out.push(e); e.b.in.push(e); });
+  $('#count').textContent = `${plural(nodes.length, 'paper')} · ${plural(edges.length, 'link')}`;
+  const tag = $('#tag').value, tags = [...new Set(nodes.flatMap(n => n.tags))].sort();
+  $('#tag').replaceChildren(new Option('All tags', ''), ...tags.map(t => new Option('#' + t, t)));
+  $('#tag').value = tags.includes(tag) ? tag : '';
+
+  // layout: generations, not calendar years. A paper sits one row below the deepest paper
+  // it builds on or cites (longest path); unlinked papers get a row of their own.
+  const linked = nodes.filter(n => n.in.length || n.out.length), loose = nodes.filter(n => !n.in.length && !n.out.length);
+  const gen = new Map(), unmet = new Map(linked.map(n => [n, n.in.length])), todo = new Set(linked);
+  let ready = linked.filter(n => !n.in.length);
+  while (todo.size) {
+    if (!ready.length)  // citation cycle: release the node with the fewest unplaced parents, oldest first
+      ready = [[...todo].sort((a, b) => unmet.get(a) - unmet.get(b) || (a.year || 0) - (b.year || 0))[0]];
+    const n = ready.shift();
+    if (!todo.delete(n)) continue;
+    gen.set(n, Math.max(0, ...n.in.filter(e => gen.has(e.a)).map(e => gen.get(e.a) + 1)));
+    for (const e of n.out) { unmet.set(e.b, unmet.get(e.b) - 1); if (!unmet.get(e.b)) ready.push(e.b); }
+  }
+  const byAge = (a, b) => (a.year || 0) - (b.year || 0) || a.id.localeCompare(b.id);
+  const bands = Array.from({length: linked.length ? Math.max(...gen.values()) + 1 : 0},
+                           (_, i) => linked.filter(n => gen.get(n) === i).sort(byAge));
+  if (loose.length) bands.push(loose.sort(byAge));
+  // order cards in a row by barycenter sweeps (fewer crossings), wrapping every PER_ROW
+  const place = band => band.forEach((n, i) => {
+    const row = Math.floor(i / PER_ROW), inRow = Math.min(PER_ROW, band.length - row * PER_ROW);
+    n.row = row; n.cx = (i % PER_ROW - (inRow - 1) / 2) * (W + GX);
+  });
+  bands.forEach((b, i) => { b.forEach(n => n.band = i); place(b); });
+  const mean = ns => ns.length ? ns.reduce((s, m) => s + m.cx, 0) / ns.length : null;
+  for (let pass = 0; pass < 8; pass++) {
+    const down = pass % 2 === 0;
+    for (const b of down ? bands : [...bands].reverse()) {
+      for (const n of b) {
+        const up = mean(n.in.map(e => e.a).filter(m => m.band !== n.band));
+        const dn = mean(n.out.map(e => e.b).filter(m => m.band !== n.band));
+        n.key = (down ? up ?? dn : dn ?? up) ?? n.cx;
+      }
+      b.sort((p, r) => p.key - r.key);
+      place(b);
+    }
+  }
+  let y = 0;
+  const bandTop = bands.map(b => {
+    const t = y;
+    b.forEach(n => n.cy = t + n.row * (H + GY) + H / 2);
+    y += Math.ceil(b.length / PER_ROW) * (H + GY) - GY + BAND_GAP;
+    return t;
+  });
+  const pos = loadPos();
+  nodes.forEach(n => { if (pos[n.id]) [n.cx, n.cy] = pos[n.id]; });
+  $('#reset').hidden = !Object.keys(pos).length;
+  if (nodes.length) {
+    X0 = Math.min(...nodes.map(n => n.cx)) - W / 2; X1 = Math.max(...nodes.map(n => n.cx)) + W / 2;
+    Y0 = Math.min(...nodes.map(n => n.cy)) - H / 2; Y1 = Math.max(...nodes.map(n => n.cy)) + H / 2;
+  }
+
+  // draw
+  $('#grid').replaceChildren(); $('#edges').replaceChildren(); $('#nodes').replaceChildren();
+  if (loose.length && linked.length) {
+    const t = bandTop[bands.length - 1];
+    el('line', {class: 'gridline', x1: X0 - 96, x2: X1 + 40, y1: t - BAND_GAP / 2, y2: t - BAND_GAP / 2}, $('#grid'));
+    el('text', {class: 'year', x: X0 - 22, y: t + H / 2 + 5}, $('#grid')).textContent = 'unlinked';
+  }
+  edges.forEach(e => {
+    e.el = el('path', {class: e.kind === 'builds_on' ? 'edge bo' : 'edge', d: curve(e)}, $('#edges'));
+    if (e.why) el('title', {}, e.el).textContent = e.why;
+  });
+  nodes.forEach(n => {
+    const g = n.el = el('g', {class: 'node ' + n.status}, $('#nodes'));
+    g.dataset.id = n.id;
+    el('title', {}, g).textContent = n.title;
+    el('rect', {class: 'card', width: W, height: H, rx: 9}, g);
+    el('rect', {class: 'bar', x: 6, y: 12, width: 3, height: H - 24, rx: 1.5}, g);
+    const c = document.createElement('div');
+    c.className = 'c';
+    c.innerHTML = `<div class="t">${esc(n.title)}</div><div class="m">${esc([surname(n), where(n)].filter(Boolean).join(' · '))}</div>`;
+    el('foreignObject', {width: W, height: H}, g).appendChild(c);
+    if (EDIT) el('title', {}, el('circle', {class: 'handle', cx: W / 2, cy: H, r: 5.5}, g)).textContent = 'Drag onto another paper to link them';
+    moveCard(n);
+  });
+  $('#empty').hidden = nodes.length > 0;
+  $('.dock').hidden = !nodes.length;
+  if (EDIT) $('#empty > div').innerHTML = 'No papers yet.<br><br><button class="btn primary" onclick="addPaper()">+ Add paper</button>';
+  const s = selId && byId[selId];
+  if (s) show(s, {keep: true}); else { selId = null; show(null); }
+}
+function curve(e) {
+  const a = e.a, b = e.b;
+  if (Math.abs(a.cy - b.cy) < H) {  // side by side: arc underneath
+    const y = Math.max(a.cy, b.cy) + H / 2, r = 26 + Math.abs(b.cx - a.cx) * .1;
+    return `M${a.cx},${a.cy + H / 2} C${a.cx},${y + r} ${b.cx},${y + r} ${b.cx},${b.cy + H / 2}`;
+  }
+  const down = a.cy < b.cy, y1 = a.cy + (down ? H : -H) / 2, y2 = b.cy - (down ? H : -H) / 2, dy = (y2 - y1) / 2;
+  return `M${a.cx},${y1} C${a.cx},${y1 + dy} ${b.cx},${y2 - dy} ${b.cx},${y2}`;
+}
+function moveCard(n) {
+  n.el.setAttribute('transform', `translate(${n.cx - W / 2},${n.cy - H / 2})`);
+  for (const e of [...n.in, ...n.out]) if (e.el) e.el.setAttribute('d', curve(e));
+}
+
+// ---- pan & zoom
+const view = {x: 0, y: 0, k: 1};
+let anim = 0;
+const apply = () => world.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`);
+function go(t, animate = true) {
+  cancelAnimationFrame(anim);
+  if (!animate) { Object.assign(view, t); return apply(); }
+  const s = {...view}, t0 = performance.now();
+  const step = now => {
+    const p = Math.min(1, (now - t0) / 260), e = 1 - (1 - p) ** 3;
+    for (const k of ['x', 'y', 'k']) view[k] = s[k] + (t[k] - s[k]) * e;
+    apply();
+    if (p < 1) anim = requestAnimationFrame(step);
+  };
+  anim = requestAnimationFrame(step);
+}
+function area() {  // the part of the screen not covered by header or panel
+  const open = panel.classList.contains('open'), wide = innerWidth > 720, hh = $('header').offsetHeight;
+  return {x0: 0, y0: hh, x1: innerWidth - (open && wide ? panel.offsetWidth : 0), y1: innerHeight - (open && !wide ? panel.offsetHeight : 0)};
+}
+function fit(animate = true) {
+  if (!nodes.length) return;
+  const a = area(), pad = 40, bx0 = X0 - 100, bx1 = X1 + 40, by0 = Y0 - 20, by1 = Y1 + 50;
+  const k = Math.max(.12, Math.min((a.x1 - a.x0 - 2 * pad) / (bx1 - bx0), (a.y1 - a.y0 - 2 * pad) / (by1 - by0), 1.2));
+  go({k, x: (a.x0 + a.x1) / 2 - (bx0 + bx1) / 2 * k, y: (a.y0 + a.y1) / 2 - (by0 + by1) / 2 * k}, animate);
+}
+function focus(n) {
+  const a = area();
+  go({k: view.k, x: (a.x0 + a.x1) / 2 - n.cx * view.k, y: (a.y0 + a.y1) / 2 - n.cy * view.k});
+}
+function zoom(f, cx = innerWidth / 2, cy = innerHeight / 2) {
+  const k = Math.min(3, Math.max(.12, view.k * f));
+  go({k, x: cx - (cx - view.x) * k / view.k, y: cy - (cy - view.y) * k / view.k}, false);
+}
+svg.addEventListener('wheel', e => { e.preventDefault(); zoom(Math.exp(-e.deltaY * (e.deltaMode ? 30 : 1) * .0015), e.clientX, e.clientY); }, {passive: false});
+$('#zin').onclick = () => zoom(1.25);
+$('#zout').onclick = () => zoom(.8);
+$('#zfit').onclick = () => fit();
+$('#reset').onclick = () => { storePos({}); build({}); fit(); };
+
+// ---- pointer: drag the background to pan, a card to move it, a card's dot onto another card to link them
+let drag = null;
+const cardAt = e => { const g = document.elementFromPoint(e.clientX, e.clientY)?.closest('.node'); return g && byId[g.dataset.id]; };
+svg.addEventListener('pointerdown', e => {
+  if (e.button) return;
+  const g = e.target.closest('.node'), n = g && byId[g.dataset.id];
+  drag = {x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, n, cx: n?.cx, cy: n?.cy, moved: false,
+          mode: !n ? 'pan' : EDIT && e.target.closest('.handle') ? 'link' : 'move'};
+  svg.setPointerCapture(e.pointerId);
+});
+svg.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+  drag.moved = true;
+  const n = drag.n;
+  if (drag.mode === 'pan') {
+    svg.classList.add('dragging'); cancelAnimationFrame(anim);
+    view.x = drag.vx + dx; view.y = drag.vy + dy; apply();
+  } else if (drag.mode === 'move') {
+    n.cx = drag.cx + dx / view.k; n.cy = drag.cy + dy / view.k; moveCard(n);
+  } else {
+    const wx = (e.clientX - view.x) / view.k, wy = (e.clientY - view.y) / view.k, y0 = n.cy + H / 2;
+    ghost.setAttribute('d', `M${n.cx},${y0} C${n.cx},${y0 + 70} ${wx},${wy - 70} ${wx},${wy}`);
+    ghost.style.display = '';
+    const t = cardAt(e);
+    nodes.forEach(m => m.el.classList.toggle('drop', m === t && m !== n));
+  }
+});
+function endDrag(e) {
+  const d = drag; drag = null;
+  if (!d) return;
+  svg.classList.remove('dragging'); ghost.style.display = 'none';
+  nodes.forEach(m => m.el.classList.remove('drop'));
+  if (!e) return;
+  if (!d.moved) return show(d.n || null);
+  if (d.mode === 'move') { const p = loadPos(); p[d.n.id] = [Math.round(d.n.cx), Math.round(d.n.cy)]; storePos(p); }
+  if (d.mode === 'link') { const t = cardAt(e); if (t && t !== d.n) linkPapers(d.n, t); }
+}
+svg.addEventListener('pointerup', endDrag);
+svg.addEventListener('pointercancel', () => endDrag(null));
+
+// ---- selection, lineage highlight, filters
+let sel = null;
+function reach(n, dir) {
+  const seen = new Set([n]), used = new Set(), todo = [n];
+  while (todo.length) for (const e of todo.pop()[dir]) {
+    const m = dir === 'in' ? e.a : e.b;
+    used.add(e);
+    if (!seen.has(m)) { seen.add(m); todo.push(m); }
+  }
+  return [seen, used];
+}
+function update() {
+  const text = q.value.trim().toLowerCase(), tag = $('#tag').value;
+  const on = new Set([...document.querySelectorAll('#status [aria-pressed=true]')].map(b => b.dataset.s));
+  let lit = null, litEdges = null;
+  if (sel) {
+    const [up, ue] = reach(sel, 'in'), [down, de] = reach(sel, 'out');
+    lit = new Set([...up, ...down]); litEdges = new Set([...ue, ...de]);
+  }
+  for (const n of nodes) {
+    n.pass = on.has(n.status) && (!tag || n.tags.includes(tag)) && (!text || n.hay.includes(text));
+    n.el.classList.toggle('dim', !n.pass || (lit && !lit.has(n)));
+    n.el.classList.toggle('sel', n === sel);
+  }
+  for (const e of edges) e.el.classList.toggle('dim', !e.a.pass || !e.b.pass || (litEdges && !litEdges.has(e)));
+}
+q.addEventListener('input', update);
+q.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const m = nodes.find(n => n.pass);
+  if (m) { show(m); focus(m); }
+});
+$('#tag').addEventListener('change', update);
+document.querySelectorAll('#status button').forEach(b => b.onclick = () => {
+  b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); update();
+});
+addEventListener('keydown', e => {
+  if ($('#dlg').open || e.target.closest?.('textarea')) return;
+  if (e.key === '/' && document.activeElement !== q) { e.preventDefault(); q.focus(); }
+  else if (e.key === 'Escape') {
+    if (document.activeElement === q) { q.value = ''; q.blur(); update(); } else show(null);
+  }
+});
+
+// ---- panel
+function md(src) {
+  const link = u => {  // local files open through the server, or directly in a snapshot
+    if (/^(https?:|mailto:|#)/i.test(u)) return u;
+    if (EDIT) return '/file?p=' + encodeURIComponent(u);
+    if (/^file:/i.test(u)) return u;
+    if (/^[a-z]:[\\/]/i.test(u)) return 'file:///' + u.replace(/\\/g, '/');
+    return u.startsWith('/') ? 'file://' + u : DATA.base + u;
+  };
+  const inline = s => esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[\s(])\*(?!\s)(.+?)\*(?=[\s).,;:!?]|$)/g, '$1<em>$2</em>')
+    .replace(/==(.+?)==/g, '<mark>$1</mark>')
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) => /^javascript:/i.test(u) ? t
+      : `<a href="${link(u)}" target="_blank" rel="noopener">${t}</a>`)
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  const out = [];
+  let para = [], list = null, code = null;
+  const endPara = () => { if (para.length) out.push('<p>' + inline(para.join(' ')) + '</p>'); para = []; };
+  const endList = () => { if (list) out.push(`</${list}>`); list = null; };
+  for (const line of src.split('\n')) {
+    let m;
+    if (code) { if (/^```/.test(line)) { out.push(`<pre><code>${esc(code.join('\n'))}</code></pre>`); code = null; } else code.push(line); }
+    else if (/^```/.test(line)) { endPara(); endList(); code = []; }
+    else if (m = line.match(/^(#{1,6})\s+(.*)/)) { endPara(); endList(); const l = Math.min(6, m[1].length + 3); out.push(`<h${l}>${inline(m[2])}</h${l}>`); }
+    else if (m = line.match(/^\s*([-*+]|\d+[.)])\s+(.*)/)) {
+      endPara();
+      const t = /\d/.test(m[1]) ? 'ol' : 'ul';
+      if (list !== t) { endList(); out.push(`<${t}>`); list = t; }
+      out.push(`<li>${inline(m[2])}</li>`);
+    }
+    else if (!line.trim()) { endPara(); endList(); }
+    else if (/^\s*(---+|\*\*\*+)\s*$/.test(line)) { endPara(); endList(); out.push('<hr>'); }
+    else if (m = line.match(/^>\s?(.*)/)) { endPara(); endList(); out.push(`<blockquote>${inline(m[1])}</blockquote>`); }
+    else if (list) out[out.length - 1] = out[out.length - 1].replace(/<\/li>$/, ' ' + inline(line.trim()) + '</li>');
+    else para.push(line.trim());
+  }
+  if (code) out.push(`<pre><code>${esc(code.join('\n'))}</code></pre>`);
+  endPara(); endList();
+  return out.join('');
+}
+function sections(n) {  // [[heading, field, text], ...] of the markdown body
+  const p = n.body.replace(/^\s*# .*\n?/, '').split(/^## +(.*)$/m), out = [];
+  for (let i = 1; i < p.length; i += 2) out.push([p[i].trim(), fold(p[i]), (p[i + 1] || '').trim()]);
+  if (EDIT) for (const [f, h] of [['tldr', 'TL;DR'], ['notes', 'Notes']]) {  // always offer these two
+    const i = out.findIndex(s => s[1] === 'abstract');
+    if (!out.some(s => s[1] === f)) out.splice(i < 0 ? out.length : i, 0, [h, f, '']);
+  }
+  return [p[0].trim(), out];
+}
+function notes(n) {
+  const [lead, secs] = sections(n);
+  let html = md(lead), abstract = '', any = false;
+  for (const [h, f, c] of secs) {
+    if (f === 'abstract') { if (c) abstract = `<details><summary>Abstract</summary>${md(c)}</details>`; continue; }
+    if (!c && !EDIT) continue;
+    any = any || !!c;
+    const edit = EDIT && f ? `<button class="link-btn" data-act="edit" data-field="${f}">Edit</button>` : '';
+    html += `<section data-field="${esc(f)}"><h3>${esc(h)}${edit}</h3>${c ? md(c)
+      : `<p class="placeholder" data-act="edit" data-field="${esc(f)}">Add ${esc(h)}…</p>`}</section>`;
+  }
+  if (!any && !EDIT) html = `<p class="empty">No notes yet. <code>pp set ${esc(n.id)} notes+="…"</code></p>`;
+  return html + abstract;
+}
+function show(n, {keep = false} = {}) {
+  const top = panel.scrollTop;
+  sel = n || null; selId = sel && sel.id;
+  history.replaceState(null, '', n ? '#' + n.id : location.pathname + location.search);
+  if (!n) { panel.classList.remove('open'); return update(); }
+  const bo = (e, other) => {
+    const act = EDIT ? ` data-act="why" data-from="${esc(e.a.id)}" data-to="${esc(e.b.id)}"` : '';
+    const why = e.why || (EDIT ? '<i>add a reason</i>' : '');
+    return item(other, why ? `<span class="why"${act}>${e.why ? esc(e.why) : why}</span>` : '',
+      EDIT ? `<button class="x" data-act="unlink" data-from="${esc(e.a.id)}" data-to="${esc(e.b.id)}" title="Remove this link">&times;</button>` : '');
+  };
+  const item = (m, extra = '', x = '') => `<li><div><a href="#${esc(m.id)}" data-go="${esc(m.id)}">${esc(m.title)}</a><span class="yr">${esc(m.year || '')}</span>${extra}</div>${x}</li>`;
+  const sec = (title, list, action = '') => list.length || action ? `<h3>${title}${action}</h3><ul>${list.join('')}</ul>` : '';
+  const kind = (es, k) => es.filter(e => e.kind === k);
+  const authors = n.authors.length > 8 ? n.authors.slice(0, 8).join(', ') + `, +${n.authors.length - 8}` : n.authors.join(', ');
+  const status = EDIT
+    ? `<div class="seg small" role="group" aria-label="Status">${['queue', 'reading', 'read'].map(s =>
+        `<button data-act="status" data-s="${s}" aria-pressed="${n.status === s}"><i class="dot ${s === 'read' ? '' : s}"></i>${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}</div>`
+    : `<span class="pill ${n.status}">${n.status}</span>`;
+  panel.innerHTML = `
+    <button class="close" data-act="close" aria-label="Close">&times;</button>
+    <div class="kicker">${status}<span>${esc(where(n))}${n.read ? ` · read ${esc(n.read)}` : ''}</span></div>
+    <h2>${esc(n.title)}</h2>
+    <div class="authors">${esc(authors)}</div>
+    <div class="links">${n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">${n.arxiv ? 'arXiv' : n.doi ? 'DOI' : 'Link'} &#8599;</a>` : ''}<code>${esc(n.id)}</code>${n.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}${EDIT ? '<button class="link-btn" data-act="details">Edit details</button>' : ''}</div>
+    <div class="rel">${sec('Builds on', kind(n.in, 'builds_on').map(e => bo(e, e.a)), EDIT ? '<button class="link-btn" data-act="add-link">+ Add</button>' : '')}${sec('Built upon by', kind(n.out, 'builds_on').map(e => bo(e, e.b)))}${sec('Cites', kind(n.in, 'cites').map(e => item(e.a)))}${sec('Cited by', kind(n.out, 'cites').map(e => item(e.b)))}</div>
+    <div class="notes">${notes(n)}</div>
+    ${EDIT ? '<div class="danger-zone"><button class="btn danger" data-act="delete">Delete paper</button></div>' : ''}`;
+  panel.classList.add('open');
+  panel.scrollTop = keep ? top : 0;
+  update();
+  if (keep) return;
+  const r = n.el.getBoundingClientRect(), a = area();
+  if (r.right > a.x1 || r.bottom > a.y1 || r.left < a.x0 || r.top < a.y0) focus(n);
+}
+panel.addEventListener('click', e => {
+  const t = e.target.closest('[data-go], [data-act]');
+  if (!t) return;
+  e.preventDefault();
+  const n = sel, d = t.dataset, from = byId[d.from], to = byId[d.to];
+  if (d.go) { show(byId[d.go]); focus(byId[d.go]); }
+  else if (d.act === 'close') show(null);
+  else if (d.act === 'status' && d.s !== n.status) api('set', {key: n.id, pairs: [`status=${d.s}`]});
+  else if (d.act === 'edit') editSection(n, d.field);
+  else if (d.act === 'cancel') show(n, {keep: true});
+  else if (d.act === 'save') saveSection(n, d.field);
+  else if (d.act === 'details') editDetails(n);
+  else if (d.act === 'add-link') addLink(n);
+  else if (d.act === 'why') linkPapers(from, to);
+  else if (d.act === 'unlink') unlink(from, to);
+  else if (d.act === 'delete') remove(n);
+});
+
+// ---- editing (only when served by `pp graph`)
+let stamp = DATA.stamp;
+async function api(op, body = {}) {
+  document.body.classList.add('busy');
+  try {
+    const r = await fetch('/api/' + op, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    const j = await r.json().catch(() => ({error: `HTTP ${r.status}`}));
+    if (!r.ok) { toast(j.error || `HTTP ${r.status}`, {error: true}); return null; }
+    if (j.log?.length) toast(j.log.join('\n'));
+    if (['add', 'mv', 'rm'].includes(op)) selId = j.key || null;
+    stamp = j.stamp;
+    build(j.data);
+    return j;
+  } catch {
+    toast('Lost contact with pp. Is `pp graph` still running?', {error: true});
+    return null;
+  } finally { document.body.classList.remove('busy'); }
+}
+let toastTimer = 0;
+function toast(msg, {error = false, action, onAction} = {}) {
+  const t = $('#toast');
+  t.className = error ? 'error' : '';
+  t.innerHTML = `<span>${esc(msg)}</span>` + (action ? `<button>${esc(action)}</button>` : '');
+  if (action) t.querySelector('button').onclick = () => { t.hidden = true; onAction(); };
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.hidden = true, error ? 9000 : action ? 7000 : 4000);
+}
+function ask({title, text = '', fields = [], ok = 'Save', danger = false}) {
+  const d = $('#dlg');
+  d.querySelector('h4').textContent = title;
+  d.querySelector('.dlg-body').innerHTML = (text ? `<p>${esc(text)}</p>` : '') + fields.map(f => {
+    const id = 'f-' + f.name;
+    const input = f.options
+      ? `<select id="${id}" name="${f.name}">${f.options.map(([v, l]) => `<option value="${esc(v)}"${v === f.value ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`
+      : `<input id="${id}" name="${f.name}" value="${esc(f.value ?? '')}" placeholder="${esc(f.placeholder || '')}" autocomplete="off"${f.required ? ' required' : ''}>`;
+    return `<label for="${id}">${esc(f.label)}</label>${input}`;
+  }).join('');
+  const okBtn = d.querySelector('[value=ok]');
+  okBtn.textContent = ok;
+  okBtn.className = 'btn ' + (danger ? 'danger-fill' : 'primary');
+  d.showModal();
+  d.querySelector('input')?.select();
+  return new Promise(res => {  // resolve from submit/cancel (synchronous), not the queued `close` event
+    const form = d.querySelector('form'), cancel = d.querySelector('[value=cancel]');
+    const done = v => { form.onsubmit = d.oncancel = cancel.onclick = null; d.close(); res(v); };
+    form.onsubmit = e => { e.preventDefault(); done(Object.fromEntries(new FormData(form))); };
+    cancel.onclick = () => done(null);
+    d.oncancel = e => { e.preventDefault(); done(null); };  // Esc
+  });
+}
+function editSection(n, f) {
+  const s = panel.querySelector(`section[data-field="${f}"]`), [, secs] = sections(n);
+  const [h, , text] = secs.find(x => x[1] === f);
+  s.innerHTML = `<h3>${esc(h)}</h3><div class="editor"><textarea spellcheck="true">${esc(text)}</textarea>
+    <div class="row"><span class="hint">Markdown · Ctrl+Enter saves · Esc cancels</span>
+    <button class="btn" data-act="cancel">Cancel</button><button class="btn primary" data-act="save" data-field="${esc(f)}">Save</button></div></div>`;
+  const ta = s.querySelector('textarea');
+  const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 4, innerHeight * .6) + 'px'; };
+  ta.addEventListener('input', grow);
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveSection(n, f); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); show(n, {keep: true}); }
+  });
+  grow(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+function saveSection(n, f) {
+  const ta = panel.querySelector(`section[data-field="${f}"] textarea`);
+  if (ta) api('set', {key: n.id, pairs: [`${f}=${ta.value}`]});
+}
+async function editDetails(n) {
+  const cur = {title: n.title, authors: n.authors.join(', '), venue: n.venue, year: String(n.year || ''),
+               tags: n.tags.join(', '), arxiv: n.arxiv || '', doi: n.doi || ''};
+  const v = await ask({title: 'Edit details', fields: [
+    {name: 'title', label: 'Title', value: cur.title, required: true},
+    {name: 'authors', label: 'Authors, comma-separated', value: cur.authors},
+    {name: 'venue', label: 'Venue', value: cur.venue, placeholder: 'CVPR'},
+    {name: 'year', label: 'Year', value: cur.year},
+    {name: 'tags', label: 'Tags, comma-separated', value: cur.tags},
+    {name: 'arxiv', label: 'arXiv id', value: cur.arxiv},
+    {name: 'doi', label: 'DOI', value: cur.doi},
+    {name: 'key', label: 'Key (renaming updates every link to it)', value: n.id, required: true}]});
+  if (!v) return;
+  const pairs = Object.keys(cur).filter(k => v[k].trim() !== cur[k]).map(k => `${k}=${v[k].trim()}`);
+  if (pairs.length && !await api('set', {key: n.id, pairs})) return;
+  const key = v.key.trim();
+  if (key !== n.id) {
+    const p = loadPos();
+    if (await api('mv', {key: n.id, new: key}) && p[n.id]) { p[key] = p[n.id]; delete p[n.id]; storePos(p); }
+  }
+}
+async function linkPapers(a, b) {  // drag from a onto b, or edit an existing reason
+  const short = m => m.title.length > 48 ? m.title.slice(0, 46) + '…' : m.title;
+  const old = [...b.in, ...a.in].find(e => e.kind === 'builds_on' && (e.a === a && e.b === b || e.a === b && e.b === a));
+  const newerFirst = old ? old.b === a : (a.year || 0) > (b.year || 0);
+  const v = await ask({title: old ? 'Edit link' : 'New lineage link', ok: old ? 'Save' : 'Link', fields: [
+    {name: 'dir', label: 'Direction', value: newerFirst ? 'ab' : 'ba', options: [
+      ['ba', `“${short(b)}” builds on “${short(a)}”`], ['ab', `“${short(a)}” builds on “${short(b)}”`]]},
+    {name: 'why', label: 'Why? One short reason', value: old?.why || '', required: true,
+     placeholder: 'adds X to Y · replaces A with B'}]});
+  if (!v) return;
+  const [src, dst] = v.dir === 'ba' ? [a, b] : [b, a];
+  const pairs = [`builds_on.${src.id}=${v.why.trim()}`];
+  if (old && old.b !== dst) {  // direction flipped: drop the old link first
+    await api('set', {key: old.b.id, pairs: [`builds_on.${old.a.id}=`]});
+  }
+  api('set', {key: dst.id, pairs});
+}
+async function addLink(n) {
+  const taken = new Set(n.in.filter(e => e.kind === 'builds_on').map(e => e.a));
+  const others = nodes.filter(m => m !== n && !taken.has(m)).sort((a, b) => a.title.localeCompare(b.title));
+  if (!others.length) return toast('No other papers to link to.');
+  const v = await ask({title: 'This paper builds on…', ok: 'Link', fields: [
+    {name: 'src', label: 'Paper', options: others.map(m => [m.id, `${m.title}${where(m) ? ` (${where(m)})` : ''}`])},
+    {name: 'why', label: 'Why? One short reason', required: true, placeholder: 'adds X to Y · replaces A with B'}]});
+  if (v) api('set', {key: n.id, pairs: [`builds_on.${v.src}=${v.why.trim()}`]});
+}
+async function unlink(a, b) {
+  const why = b.in.find(e => e.kind === 'builds_on' && e.a === a)?.why || '?';
+  if (await api('set', {key: b.id, pairs: [`builds_on.${a.id}=`]}))
+    toast(`Removed: “${b.title}” builds on “${a.title}”`, {action: 'Undo',
+      onAction: () => api('set', {key: b.id, pairs: [`builds_on.${a.id}=${why}`]})});
+}
+async function remove(n) {
+  const ok = await ask({title: 'Delete this paper?', ok: 'Delete', danger: true,
+    text: `“${n.title}”. This deletes lib/${n.id}.md, including its notes, and every link to it.`});
+  if (ok) api('rm', {key: n.id});
+}
+async function addPaper() {
+  const v = await ask({title: 'Add a paper', ok: 'Add', fields: [
+    {name: 'q', label: 'arXiv id, DOI, URL or title', required: true, placeholder: '2503.11651'},
+    {name: 'status', label: 'Status', value: 'queue', options: [['queue', 'Queue'], ['reading', 'Reading'], ['read', 'Read']]},
+    {name: 'tags', label: 'Tags, comma-separated', value: $('#tag').value}]});
+  if (!v) return;
+  toast('Fetching metadata…');
+  const j = await api('add', {q: v.q.trim(), status: v.status, tags: v.tags.split(',').map(s => s.trim()).filter(Boolean)});
+  if (j && byId[j.key]) focus(byId[j.key]);
+}
+if (EDIT) {
+  $('#add').onclick = addPaper;
+  $('#relink').onclick = () => { toast('Asking Semantic Scholar…'); api('link'); };
+  setInterval(sync, 2500);  // pick up edits made elsewhere, e.g. `pp set` in a terminal
+  addEventListener('visibilitychange', () => sync());
+}
+async function sync(force = false) {
+  if (!force && (document.hidden || drag || $('#dlg').open || panel.querySelector('.editor'))) return;
+  try {
+    const s = (await (await fetch('/api/stamp')).json()).stamp;
+    if (s !== stamp) { stamp = s; build(await (await fetch('/api/data')).json()); }
+  } catch {}
+}
+
+build(DATA);
+fit(false);
+if (sel) show(sel);  // moves the view only if the paper would be off screen
+</script>
+</body>
+</html>
