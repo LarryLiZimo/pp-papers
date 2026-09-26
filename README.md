@@ -6,9 +6,11 @@ A paper library in plain text.
 - **Unix.** Small commands that print plain text and compose with pipes. One Python file, no dependencies, no database, no account.
 - **Made for agents.** The files and the commands are the whole interface, so Claude Code or any agent with a shell can keep the library for you.
 
+Why not Zotero? Zotero keeps your library in a database behind an app. pp keeps it in plain files that you, `grep`, `git` and your agent can all read and write.
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/lineage-dark.png">
-  <img alt="The lineage page: papers laid out as generations of ideas, with VGGT selected and its notes open" src=".github/lineage-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/LarryLiZimo/pp-papers/main/.github/lineage-dark.png">
+  <img alt="The lineage page: papers laid out as generations of ideas, with VGGT selected and its notes open" src="https://raw.githubusercontent.com/LarryLiZimo/pp-papers/main/.github/lineage-light.png">
 </picture>
 
 ## Features
@@ -24,11 +26,26 @@ A paper library in plain text.
 Needs Python 3.9 or newer.
 
 ```sh
+uv tool install git+https://github.com/LarryLiZimo/pp-papers    # or: pipx install git+https://...
+```
+
+For Claude Code, add the skill as a plugin:
+
+```text
+/plugin marketplace add LarryLiZimo/pp-papers
+/plugin install pp@pp-papers
+```
+
+Papers go to `~/papers`; set `PP_DIR` to use another folder.
+
+Or run it from a clone, with nothing to install:
+
+```sh
 git clone https://github.com/LarryLiZimo/pp-papers ~/.local/share/pp-papers
 ln -s ~/.local/share/pp-papers/pp ~/.local/bin/pp
 ```
 
-On Windows, clone anywhere and add the folder to `PATH`. Papers go to `~/papers`; set `PP_DIR` to use another folder. For Claude Code, copy `SKILL.md` to `~/.claude/skills/pp/`.
+On Windows, clone anywhere and add the folder to `PATH`. For Claude Code without the plugin, copy `SKILL.md` to `~/.claude/skills/pp/`.
 
 Or paste this into your agent:
 
@@ -42,8 +59,9 @@ Install pp (https://github.com/LarryLiZimo/pp-papers), a plain-text paper librar
    make sure that folder is on PATH; on Windows, add the clone folder to my user PATH.
 4. Ask me where my library should live. ~/papers is the default; for any other folder, set
    PP_DIR persistently.
-5. If you are Claude Code, copy <clone>/SKILL.md to ~/.claude/skills/pp/SKILL.md. Other agents:
-   add its rules to your persistent instructions.
+5. If you are Claude Code, install the skill as a plugin: claude plugin marketplace add
+   LarryLiZimo/pp-papers, then claude plugin install pp@pp-papers. Other agents: add the rules in
+   <clone>/SKILL.md to your persistent instructions.
 6. Verify: python test.py in the clone, then pp --version (by full path if your shell does not
    see the new PATH yet).
 
@@ -53,7 +71,7 @@ short summary of what you changed.
 
 ## Usage
 
-![Adding VGGT, linking it to earlier papers, listing and exporting BibTeX in a terminal](.github/terminal.png)
+![Adding VGGT, linking it to earlier papers, listing and exporting BibTeX in a terminal](https://raw.githubusercontent.com/LarryLiZimo/pp-papers/main/.github/terminal.png)
 
 | Command | Does |
 |---|---|

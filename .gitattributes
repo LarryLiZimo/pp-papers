@@ -1,2 +1,3 @@
 * text=auto eol=lf
 *.cmd text eol=crlf
+pp linguist-language=Python

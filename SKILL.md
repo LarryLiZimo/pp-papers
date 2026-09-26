@@ -5,7 +5,7 @@ description: Keep the user's paper library with the `pp` CLI (plain text, one Ma
 
 # Paper library (`pp`)
 
-Every paper is `$PP_DIR/<key>.md` (default `~/papers`): YAML front matter (metadata, links) plus Markdown (`## Notes`, `## Abstract`). `pp -h` lists everything.
+Every paper is `$PP_DIR/<key>.md` (default `~/papers`): YAML front matter (metadata, links) plus Markdown (`## Notes`, `## Abstract`). `pp -h` lists everything. If `pp` is not on PATH and this skill came with the Claude Code plugin, run `"${CLAUDE_PLUGIN_ROOT}/pp"` in its place.
 
 | Command | Does |
 |---|---|

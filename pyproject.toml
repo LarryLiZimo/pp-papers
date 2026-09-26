@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pp-papers"
+dynamic = ["version"]
+description = "A paper library in plain text: one Markdown file per paper, a Unix CLI, an editable lineage graph, made for AI agents."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "LarryLiZimo" }]
+keywords = ["papers", "research", "arxiv", "bibtex", "markdown", "reference-manager", "claude-code"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering",
+]
+
+[project.urls]
+Homepage = "https://github.com/LarryLiZimo/pp-papers"
+
+[project.scripts]
+pp = "pp_papers.pp:main"
+
+# pp stays one file you can run from a clone; the wheel ships it as a module next to its page.
+[tool.hatch.version]
+path = "pp"
+
+[tool.hatch.build.targets.wheel]
+bypass-selection = true
+
+[tool.hatch.build.targets.wheel.force-include]
+"pp" = "pp_papers/pp.py"
+"pp.html" = "pp_papers/pp.html"
+
+[tool.hatch.build.targets.sdist]
+include = ["pp", "pp.html", "pp.cmd", "SKILL.md", "test.py", "README.md", "LICENSE"]
