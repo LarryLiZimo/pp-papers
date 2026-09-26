@@ -8,14 +8,14 @@
 :root {
   --bg: #f6f5f1; --surface: #fffefb; --ink: #1f1e1b; --muted: #6f6c64; --faint: #a8a49a;
   --line: #e2dfd6; --grid: #e7e4dc; --accent: #2459c6; --accent-soft: #e6ecf8; --on-accent: #ffffff;
-  --reading: #b26b00; --queue: #a8a49a; --edge: #bdb9ae; --danger: #b93a2b;
+  --star: #c98a00; --edge: #bdb9ae; --danger: #b93a2b;
   --shadow: 0 1px 2px rgba(30,25,15,.06), 0 8px 28px rgba(30,25,15,.09);
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #141413; --surface: #1d1c1a; --ink: #ebe9e3; --muted: #a29f97; --faint: #6c6962;
     --line: #302f2c; --grid: #22211f; --accent: #7ea6ff; --accent-soft: #1c2740; --on-accent: #0d1424;
-    --reading: #e6a347; --queue: #6c6962; --edge: #4d4b46; --danger: #ff8a7a;
+    --star: #f0b429; --edge: #4d4b46; --danger: #ff8a7a;
     --shadow: 0 1px 2px rgba(0,0,0,.5), 0 8px 28px rgba(0,0,0,.4);
   }
 }
@@ -31,6 +31,10 @@ a:hover { text-decoration: underline; }
 .btn { padding: 5px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; white-space: nowrap; }
 .btn:hover { border-color: var(--faint); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.star { display: inline-flex; align-items: center; gap: 6px; }
+.btn.star[aria-pressed=true] { border-color: var(--star); background: color-mix(in srgb, var(--star) 14%, var(--surface)); }
+.btn.star svg path, .pill svg path { fill: none; stroke: currentColor; stroke-width: 1.3; }
+.btn.star[aria-pressed=true] svg path, .pill svg path { fill: var(--star); stroke: var(--star); }
 .btn.danger { color: var(--danger); }
 .btn.danger-fill { background: var(--danger); border-color: var(--danger); color: var(--surface); font-weight: 600; }
 .link-btn { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px;
@@ -46,39 +50,31 @@ h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
 #q { width: 240px; max-width: 100%; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
   background: var(--surface); outline: none; }
 #q:focus { border-color: var(--accent); }
-.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
-.seg button { display: flex; align-items: center; gap: 6px; border: 0; background: none; padding: 5px 10px;
-  cursor: pointer; color: var(--faint); }
-.seg button + button { border-left: 1px solid var(--line); }
-.seg button[aria-pressed=true] { color: var(--ink); background: var(--accent-soft); }
-.seg.small { display: inline-flex; }
-.seg.small button { padding: 2px 10px; font-size: 12px; }
-.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-.dot.reading { background: var(--reading); }
-.dot.queue { background: none; border: 1.5px dashed var(--queue); }
 select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 
 #canvas { position: fixed; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; user-select: none; }
 #canvas.dragging { cursor: grabbing; }
-.year { fill: var(--muted); font-size: 13px; font-weight: 600; text-anchor: end; }
-.gridline { stroke: var(--grid); stroke-width: 1; }
+.label { fill: var(--muted); font-size: 13px; font-weight: 600; }
 .edge { fill: none; stroke: var(--edge); stroke-width: 1.3; stroke-dasharray: 4 4; transition: opacity .15s; }
+.edge.off { display: none; }
 .edge.bo { stroke: var(--accent); stroke-width: 2; stroke-dasharray: none; marker-end: url(#arrow); }
 .ghost { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 4; pointer-events: none; marker-end: url(#arrow); }
 .arrowhead { fill: var(--accent); }
 .node { cursor: pointer; transition: opacity .15s; }
 .node .card { fill: var(--surface); stroke: var(--line); }
 .node:hover .card { stroke: var(--faint); }
-.node .bar { fill: var(--accent); }
-.node.reading .bar { fill: var(--reading); }
-.node.queue .bar { fill: var(--queue); }
-.node.queue .card { stroke: var(--faint); stroke-dasharray: 4 3; }
-.node.sel .card { stroke: var(--accent); stroke-width: 2; stroke-dasharray: none; }
+.node.sel .card { stroke: var(--accent); stroke-width: 2; }
 .node.drop .card { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 5 3; }
-.node .c { height: 100%; padding: 6px 10px 6px 16px; display: flex; flex-direction: column; justify-content: center; }
+.node .c { height: 100%; padding: 6px 26px 6px 12px; display: flex; flex-direction: column; justify-content: center; }
 .node .t { flex-shrink: 0; font-size: 12.5px; font-weight: 600; line-height: 1.3; overflow: hidden; padding-bottom: 2px;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.node.queue .t { color: var(--muted); font-weight: 500; }
+.node .star path { fill: none; stroke: var(--faint); stroke-width: 1.2; }
+.node .star circle { fill: transparent; }
+.node .star { opacity: 0; transition: opacity .12s; }
+.editable .node:hover .star, .node.starred .star { opacity: 1; }
+.editable .node .star { cursor: pointer; }
+.editable .node .star:hover path { stroke: var(--star); }
+.node.starred .star path { fill: var(--star); stroke: var(--star); }
 .node .m { margin-top: 1px; font-size: 11px; line-height: 1.3; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .handle { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; cursor: crosshair; opacity: 0; transition: opacity .12s; }
 .node:hover .handle, .node.sel .handle { opacity: 1; }
@@ -90,6 +86,8 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; ba
 .dock button { min-width: 30px; height: 28px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); cursor: pointer; }
 .dock .sw { display: inline-flex; align-items: center; gap: 6px; }
 .dock .sw:last-child { padding-right: 6px; }
+.dock button.sw { min-width: 0; height: auto; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; }
+.dock button.sw[aria-pressed=false] { opacity: .45; text-decoration: line-through; }
 
 aside { position: fixed; z-index: 4; top: var(--header, 0px); right: 0; bottom: 0; width: min(440px, 100%); overflow-y: auto;
   padding: 18px 22px 48px; background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow);
@@ -104,9 +102,8 @@ aside.open { transform: none; }
   background: none; color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; }
 .close:hover { background: var(--bg); }
 .kicker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
-.pill { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 650; color: var(--accent); background: var(--accent-soft); }
-.pill.reading { color: var(--reading); background: color-mix(in srgb, var(--reading) 14%, transparent); }
-.pill.queue { color: var(--muted); background: color-mix(in srgb, var(--queue) 20%, transparent); }
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px; font-size: 11px;
+  font-weight: 650; color: var(--star); background: color-mix(in srgb, var(--star) 14%, transparent); }
 aside h2 { margin: 8px 0 6px; font-size: 18px; line-height: 1.3; letter-spacing: -.01em; }
 .authors { color: var(--muted); font-size: 13px; }
 .links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 10px 0 4px; font-size: 13px; }
@@ -138,7 +135,7 @@ aside h3 { display: flex; align-items: baseline; justify-content: space-between;
 .editor .row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .hint { margin-right: auto; color: var(--faint); font-size: 12px; }
 .danger-zone { margin-top: 30px; padding-top: 14px; border-top: 1px solid var(--line); }
-mark { color: inherit; background: color-mix(in srgb, var(--reading) 30%, transparent); }
+mark { color: inherit; background: color-mix(in srgb, var(--star) 30%, transparent); }
 .empty { color: var(--muted); }
 #empty { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; pointer-events: none; }
 #empty > div { pointer-events: auto; }
@@ -165,11 +162,7 @@ dialog menu { display: flex; justify-content: flex-end; gap: 8px; margin: 18px 0
   <span class="count" id="count"></span>
   <span class="grow"></span>
   <input id="q" type="search" placeholder="Search titles, authors, notes  ( / )" autocomplete="off">
-  <div class="seg" id="status">
-    <button data-s="read" aria-pressed="true"><i class="dot"></i>Read</button>
-    <button data-s="reading" aria-pressed="true"><i class="dot reading"></i>Reading</button>
-    <button data-s="queue" aria-pressed="true"><i class="dot queue"></i>Queue</button>
-  </div>
+  <button class="btn star" id="starred" aria-pressed="false" title="Show only starred papers">Starred</button>
   <select id="tag" aria-label="Tag"><option value="">All tags</option></select>
   <button class="btn" id="relink" title="Refresh citation links and venues from Semantic Scholar" hidden>&#8635; Citations</button>
   <button class="btn primary" id="add" hidden>+ Add paper</button>
@@ -180,9 +173,9 @@ dialog menu { display: flex; justify-content: flex-end; gap: 8px; margin: 18px 0
 </svg>
 <div class="dock">
   <button id="zout" aria-label="Zoom out">&minus;</button><button id="zfit">Fit</button><button id="zin" aria-label="Zoom in">+</button>
-  <button id="reset" title="Forget dragged card positions" hidden>Reset layout</button>
+  <button id="arrange" title="Lay the cards out again as lineages (forgets cards you dragged)">Arrange</button>
   <span class="sw"><svg width="26" height="8"><path d="M1 4H25" class="edge bo" style="marker-end:none"/></svg>builds on</span>
-  <span class="sw"><svg width="26" height="8"><path d="M1 4H25" class="edge"/></svg>cites</span>
+  <button class="sw" id="cites" title="Show or hide citation links"><svg width="26" height="8"><path d="M1 4H25" class="edge"/></svg>cites</button>
   <span class="sw" id="draghint" hidden><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" class="handle" style="opacity:1"/></svg>drag onto a paper to link</span>
 </div>
 <aside id="panel"></aside>
@@ -192,7 +185,12 @@ dialog menu { display: flex; justify-content: flex-end; gap: 8px; margin: 18px 0
 <div id="toast" hidden></div>
 <script>
 let DATA = /*DATA*/null;
-const W = 220, H = 64, GX = 26, GY = 18, BAND_GAP = 66, PER_ROW = 5, NS = 'http://www.w3.org/2000/svg';
+const W = 220, H = 64, GX = 26, GY = 18, BAND_GAP = 56, TREE_GAP = 90, PER_ROW = 5, NS = 'http://www.w3.org/2000/svg';
+const STAR = 'M' + Array.from({length: 10}, (_, i) => {  // five points, radius 6.5, around 0,0
+  const a = Math.PI * (i / 5 - .5), r = i % 2 ? 2.7 : 6.5;
+  return (r * Math.cos(a)).toFixed(2) + ',' + (r * Math.sin(a)).toFixed(2);
+}).join('L') + 'Z';
+const starIcon = () => `<svg width="14" height="14" viewBox="-7.5 -7.5 15 15" aria-hidden="true"><path d="${STAR}"/></svg>`;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.appendChild(e); return e; };
@@ -207,10 +205,14 @@ $('#add').hidden = $('#relink').hidden = $('#draghint').hidden = !EDIT;
 const headerHeight = () => document.documentElement.style.setProperty('--header', $('header').offsetHeight + 'px');
 headerHeight(); addEventListener('resize', headerHeight);  // the panel opens below the toolbar
 
-// ---- dragged card positions live in this browser only
-const POS = 'pp.pos';
+$('#starred').insertAdjacentHTML('afterbegin', starIcon());
+
+// ---- dragged card positions and the citations switch live in this browser only
+const POS = 'pp.pos', CITES = 'pp.cites';
 const loadPos = () => { try { return JSON.parse(localStorage.getItem(POS)) || {}; } catch { return {}; } };
-const storePos = p => { try { localStorage.setItem(POS, JSON.stringify(p)); } catch {} $('#reset').hidden = !Object.keys(p).length; };
+const storePos = p => { try { localStorage.setItem(POS, JSON.stringify(p)); } catch {} };
+let citesPref = null, citesOn = false;  // null: show citations only while nothing is linked by hand
+try { const v = localStorage.getItem(CITES); if (v) citesPref = v === 'on'; } catch {}
 
 // ---- build: data -> graph, layout, drawing. Runs again after every edit.
 let nodes = [], edges = [], byId = {}, X0 = 0, X1 = 0, Y0 = 0, Y1 = 0, selId = decodeURIComponent(location.hash.slice(1)) || null;
@@ -226,52 +228,12 @@ function build(data) {
   $('#tag').replaceChildren(new Option('All tags', ''), ...tags.map(t => new Option('#' + t, t)));
   $('#tag').value = tags.includes(tag) ? tag : '';
 
-  // layout: generations, not calendar years. A paper sits one row below the deepest paper
-  // it builds on or cites (longest path); unlinked papers get a row of their own.
-  const linked = nodes.filter(n => n.in.length || n.out.length), loose = nodes.filter(n => !n.in.length && !n.out.length);
-  const gen = new Map(), unmet = new Map(linked.map(n => [n, n.in.length])), todo = new Set(linked);
-  let ready = linked.filter(n => !n.in.length);
-  while (todo.size) {
-    if (!ready.length)  // citation cycle: release the node with the fewest unplaced parents, oldest first
-      ready = [[...todo].sort((a, b) => unmet.get(a) - unmet.get(b) || (a.year || 0) - (b.year || 0))[0]];
-    const n = ready.shift();
-    if (!todo.delete(n)) continue;
-    gen.set(n, Math.max(0, ...n.in.filter(e => gen.has(e.a)).map(e => gen.get(e.a) + 1)));
-    for (const e of n.out) { unmet.set(e.b, unmet.get(e.b) - 1); if (!unmet.get(e.b)) ready.push(e.b); }
-  }
-  const byAge = (a, b) => (a.year || 0) - (b.year || 0) || a.id.localeCompare(b.id);
-  const bands = Array.from({length: linked.length ? Math.max(...gen.values()) + 1 : 0},
-                           (_, i) => linked.filter(n => gen.get(n) === i).sort(byAge));
-  if (loose.length) bands.push(loose.sort(byAge));
-  // order cards in a row by barycenter sweeps (fewer crossings), wrapping every PER_ROW
-  const place = band => band.forEach((n, i) => {
-    const row = Math.floor(i / PER_ROW), inRow = Math.min(PER_ROW, band.length - row * PER_ROW);
-    n.row = row; n.cx = (i % PER_ROW - (inRow - 1) / 2) * (W + GX);
-  });
-  bands.forEach((b, i) => { b.forEach(n => n.band = i); place(b); });
-  const mean = ns => ns.length ? ns.reduce((s, m) => s + m.cx, 0) / ns.length : null;
-  for (let pass = 0; pass < 8; pass++) {
-    const down = pass % 2 === 0;
-    for (const b of down ? bands : [...bands].reverse()) {
-      for (const n of b) {
-        const up = mean(n.in.map(e => e.a).filter(m => m.band !== n.band));
-        const dn = mean(n.out.map(e => e.b).filter(m => m.band !== n.band));
-        n.key = (down ? up ?? dn : dn ?? up) ?? n.cx;
-      }
-      b.sort((p, r) => p.key - r.key);
-      place(b);
-    }
-  }
-  let y = 0;
-  const bandTop = bands.map(b => {
-    const t = y;
-    b.forEach(n => n.cy = t + n.row * (H + GY) + H / 2);
-    y += Math.ceil(b.length / PER_ROW) * (H + GY) - GY + BAND_GAP;
-    return t;
-  });
+  const bo = edges.filter(e => e.kind === 'builds_on');
+  citesOn = citesPref ?? !bo.length;
+  $('#cites').setAttribute('aria-pressed', citesOn);
+  const looseTop = layout(bo.length ? bo : edges);  // citations shape the layout only until you link papers yourself
   const pos = loadPos();
   nodes.forEach(n => { if (pos[n.id]) [n.cx, n.cy] = pos[n.id]; });
-  $('#reset').hidden = !Object.keys(pos).length;
   if (nodes.length) {
     X0 = Math.min(...nodes.map(n => n.cx)) - W / 2; X1 = Math.max(...nodes.map(n => n.cx)) + W / 2;
     Y0 = Math.min(...nodes.map(n => n.cy)) - H / 2; Y1 = Math.max(...nodes.map(n => n.cy)) + H / 2;
@@ -279,24 +241,24 @@ function build(data) {
 
   // draw
   $('#grid').replaceChildren(); $('#edges').replaceChildren(); $('#nodes').replaceChildren();
-  if (loose.length && linked.length) {
-    const t = bandTop[bands.length - 1];
-    el('line', {class: 'gridline', x1: X0 - 96, x2: X1 + 40, y1: t - BAND_GAP / 2, y2: t - BAND_GAP / 2}, $('#grid'));
-    el('text', {class: 'year', x: X0 - 22, y: t + H / 2 + 5}, $('#grid')).textContent = 'unlinked';
-  }
+  if (looseTop !== null) el('text', {class: 'label', x: 0, y: looseTop - 14}, $('#grid')).textContent = 'Not linked yet';
   edges.forEach(e => {
     e.el = el('path', {class: e.kind === 'builds_on' ? 'edge bo' : 'edge', d: curve(e)}, $('#edges'));
   });
   nodes.forEach(n => {
-    const g = n.el = el('g', {class: 'node ' + n.status}, $('#nodes'));
+    const g = n.el = el('g', {class: 'node' + (n.star ? ' starred' : '')}, $('#nodes'));
     g.dataset.id = n.id;
     el('title', {}, g).textContent = n.title;
     el('rect', {class: 'card', width: W, height: H, rx: 9}, g);
-    el('rect', {class: 'bar', x: 6, y: 12, width: 3, height: H - 24, rx: 1.5}, g);
     const c = document.createElement('div');
     c.className = 'c';
     c.innerHTML = `<div class="t">${esc(n.title)}</div><div class="m">${esc([surname(n), where(n)].filter(Boolean).join(' · '))}</div>`;
     el('foreignObject', {width: W, height: H}, g).appendChild(c);
+    if (EDIT || n.star) {
+      const s = el('g', {class: 'star', transform: `translate(${W - 15},15)`}, g);
+      el('circle', {r: 11}, s); el('path', {d: STAR}, s);
+      if (EDIT) el('title', {}, s).textContent = n.star ? 'Unstar' : 'Star';
+    }
     if (EDIT) el('title', {}, el('circle', {class: 'handle', cx: W / 2, cy: H, r: 5.5}, g)).textContent = 'Drag onto another paper to link them';
     moveCard(n);
   });
@@ -305,6 +267,91 @@ function build(data) {
   if (EDIT) $('#empty > div').innerHTML = 'No papers yet.<br><br><button class="btn primary" onclick="addPaper()">+ Add paper</button>';
   const s = selId && byId[selId];
   if (s) show(s, {keep: true}); else { selId = null; show(null); }
+}
+// layout: papers joined by `lay` links form lineages. In each, a paper sits one row below the
+// deepest paper it builds on (generations, not calendar years). Lineages are packed side by side,
+// tallest first, into a block shaped like the window; papers without links fill a grid below it.
+// Returns the top of that grid, or null when there is no grid to label.
+function layout(lay) {
+  const up = new Map(nodes.map(n => [n, []])), down = new Map(nodes.map(n => [n, []]));
+  lay.forEach(e => { down.get(e.a).push(e.b); up.get(e.b).push(e.a); });
+  const byAge = (a, b) => (a.year || 0) - (b.year || 0) || a.id.localeCompare(b.id);
+  const linked = nodes.filter(n => up.get(n).length || down.get(n).length);
+  const loose = nodes.filter(n => !up.get(n).length && !down.get(n).length).sort(byAge);
+
+  // generations: longest path from a root
+  const gen = new Map(), unmet = new Map(linked.map(n => [n, up.get(n).length])), todo = new Set(linked);
+  let ready = linked.filter(n => !up.get(n).length);
+  while (todo.size) {
+    if (!ready.length)  // a cycle: release the paper with the fewest unplaced parents, oldest first
+      ready = [[...todo].sort((a, b) => unmet.get(a) - unmet.get(b) || byAge(a, b))[0]];
+    const n = ready.shift();
+    if (!todo.delete(n)) continue;
+    gen.set(n, Math.max(0, ...up.get(n).filter(m => gen.has(m)).map(m => gen.get(m) + 1)));
+    for (const m of down.get(n)) { unmet.set(m, unmet.get(m) - 1); if (!unmet.get(m)) ready.push(m); }
+  }
+
+  // each lineage on its own: rows by generation, ordered by barycenter sweeps (fewer crossings)
+  const seen = new Set(), trees = [];
+  for (const n of linked) {
+    if (seen.has(n)) continue;
+    const t = [], stack = [n];
+    seen.add(n);
+    while (stack.length) {
+      const m = stack.pop();
+      t.push(m);
+      for (const o of [...up.get(m), ...down.get(m)]) if (!seen.has(o)) { seen.add(o); stack.push(o); }
+    }
+    trees.push(tree(t));
+  }
+  function tree(t) {  // -> {t, w, h}, with n.lx, n.ly relative to the lineage's top left
+    const bands = [];
+    t.sort(byAge).forEach(n => (bands[gen.get(n)] ||= []).push(n));
+    const rows = bands.filter(Boolean);
+    const place = b => b.forEach((n, i) => {
+      const row = Math.floor(i / PER_ROW), inRow = Math.min(PER_ROW, b.length - row * PER_ROW);
+      n.row = row; n.lx = (i % PER_ROW - (inRow - 1) / 2) * (W + GX);
+    });
+    rows.forEach(place);
+    const mean = ns => ns.length ? ns.reduce((s, m) => s + m.lx, 0) / ns.length : null;
+    for (let pass = 0; pass < 8; pass++) {
+      const dn = pass % 2 === 0;
+      for (const b of dn ? rows : [...rows].reverse()) {
+        for (const n of b) {
+          const u = mean(up.get(n).filter(m => gen.get(m) !== gen.get(n)));
+          const d = mean(down.get(n).filter(m => gen.get(m) !== gen.get(n)));
+          n.key = (dn ? u ?? d : d ?? u) ?? n.lx;
+        }
+        b.sort((p, r) => p.key - r.key);
+        place(b);
+      }
+    }
+    let y = 0;
+    for (const b of rows) {
+      b.forEach(n => n.ly = y + n.row * (H + GY));
+      y += Math.ceil(b.length / PER_ROW) * (H + GY) - GY + BAND_GAP;
+    }
+    const x0 = Math.min(...t.map(n => n.lx));
+    t.forEach(n => n.lx -= x0);
+    return {t, w: Math.max(...t.map(n => n.lx)) + W, h: y - BAND_GAP};
+  }
+
+  // pack: shelves of lineages as wide as a block with the window's proportions
+  const aspect = Math.min(2.4, Math.max(1, innerWidth / Math.max(1, innerHeight - $('header').offsetHeight)));
+  const cell = (W + GX) * (H + GY);
+  const room = trees.reduce((s, b) => s + (b.w + TREE_GAP) * (b.h + TREE_GAP), 0) + loose.length * cell;
+  const width = Math.max(W, ...trees.map(b => b.w), Math.sqrt(room * aspect));
+  trees.sort((p, r) => r.h - p.h || r.t.length - p.t.length || byAge(p.t[0], r.t[0]));
+  let x = 0, y = 0, shelf = 0;
+  for (const b of trees) {
+    if (x && x + b.w > width) { x = 0; y += shelf + TREE_GAP; shelf = 0; }
+    b.t.forEach(n => { n.cx = x + n.lx + W / 2; n.cy = y + n.ly + H / 2; });
+    x += b.w + TREE_GAP; shelf = Math.max(shelf, b.h);
+  }
+  if (trees.length) y += shelf + TREE_GAP;
+  const cols = Math.max(1, Math.floor((width + GX) / (W + GX)));
+  loose.forEach((n, i) => { n.cx = (i % cols) * (W + GX) + W / 2; n.cy = y + Math.floor(i / cols) * (H + GY) + H / 2; });
+  return trees.length && loose.length ? y : null;
 }
 function curve(e) {
   const a = e.a, b = e.b;
@@ -322,10 +369,10 @@ function moveCard(n) {
 
 // ---- pan & zoom
 const view = {x: 0, y: 0, k: 1};
-let anim = 0;
+let anim = 0, fitted = false;  // fitted: nobody has panned or zoomed since Fit, so a resize fits again
 const apply = () => world.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`);
 function go(t, animate = true) {
-  cancelAnimationFrame(anim);
+  cancelAnimationFrame(anim); fitted = false;
   if (!animate) { Object.assign(view, t); return apply(); }
   const s = {...view}, t0 = performance.now();
   const step = now => {
@@ -336,16 +383,19 @@ function go(t, animate = true) {
   };
   anim = requestAnimationFrame(step);
 }
-function area() {  // the part of the screen not covered by header or panel
+function area() {  // the part of the screen not covered by header, dock or panel
   const open = panel.classList.contains('open'), wide = innerWidth > 720, hh = $('header').offsetHeight;
-  return {x0: 0, y0: hh, x1: innerWidth - (open && wide ? panel.offsetWidth : 0), y1: innerHeight - (open && !wide ? panel.offsetHeight : 0)};
+  return {x0: 0, y0: hh, x1: innerWidth - (open && wide ? panel.offsetWidth : 0),
+          y1: innerHeight - (open && !wide ? panel.offsetHeight : $('.dock').offsetHeight + 16)};
 }
 function fit(animate = true) {
   if (!nodes.length) return;
-  const a = area(), pad = 40, bx0 = X0 - 100, bx1 = X1 + 40, by0 = Y0 - 20, by1 = Y1 + 50;
+  const a = area(), pad = 40, bx0 = X0 - 30, bx1 = X1 + 30, by0 = Y0 - 20, by1 = Y1 + 40;
   const k = Math.max(.12, Math.min((a.x1 - a.x0 - 2 * pad) / (bx1 - bx0), (a.y1 - a.y0 - 2 * pad) / (by1 - by0), 1.2));
   go({k, x: (a.x0 + a.x1) / 2 - (bx0 + bx1) / 2 * k, y: (a.y0 + a.y1) / 2 - (by0 + by1) / 2 * k}, animate);
+  fitted = true;
 }
+addEventListener('resize', () => { if (fitted) fit(false); });
 function focus(n) {
   const a = area();
   go({k: view.k, x: (a.x0 + a.x1) / 2 - n.cx * view.k, y: (a.y0 + a.y1) / 2 - n.cy * view.k});
@@ -358,7 +408,22 @@ svg.addEventListener('wheel', e => { e.preventDefault(); zoom(Math.exp(-e.deltaY
 $('#zin').onclick = () => zoom(1.25);
 $('#zout').onclick = () => zoom(.8);
 $('#zfit').onclick = () => fit();
-$('#reset').onclick = () => { storePos({}); build({}); fit(); };
+$('#arrange').onclick = () => {  // forget dragged cards and glide every card to its place in the layout
+  const from = new Map(nodes.map(n => [n.id, [n.cx, n.cy]]));
+  storePos({}); build({}); fit();
+  const moves = nodes.map(n => [n, from.get(n.id) || [n.cx, n.cy], [n.cx, n.cy]]), t0 = performance.now();
+  const step = now => {
+    const p = Math.min(1, (now - t0) / 380), e = 1 - (1 - p) ** 3;
+    for (const [n, [ax, ay], [bx, by]] of moves) { n.cx = ax + (bx - ax) * e; n.cy = ay + (by - ay) * e; moveCard(n); }
+    if (p < 1) requestAnimationFrame(step);
+  };
+  step(t0);
+};
+$('#cites').onclick = () => {
+  citesPref = !citesOn;
+  try { localStorage.setItem(CITES, citesPref ? 'on' : 'off'); } catch {}
+  citesOn = citesPref; $('#cites').setAttribute('aria-pressed', citesOn); update();
+};
 
 // ---- pointer: drag the background to pan, a card to move it, a card's dot onto another card to link them
 let drag = null;
@@ -367,7 +432,7 @@ svg.addEventListener('pointerdown', e => {
   if (e.button) return;
   const g = e.target.closest('.node'), n = g && byId[g.dataset.id];
   drag = {x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, n, cx: n?.cx, cy: n?.cy, moved: false,
-          mode: !n ? 'pan' : EDIT && e.target.closest('.handle') ? 'link' : 'move'};
+          mode: !n ? 'pan' : EDIT && e.target.closest('.handle') ? 'link' : 'move', star: EDIT && !!e.target.closest('.star')};
   svg.setPointerCapture(e.pointerId);
 });
 svg.addEventListener('pointermove', e => {
@@ -377,7 +442,7 @@ svg.addEventListener('pointermove', e => {
   drag.moved = true;
   const n = drag.n;
   if (drag.mode === 'pan') {
-    svg.classList.add('dragging'); cancelAnimationFrame(anim);
+    svg.classList.add('dragging'); cancelAnimationFrame(anim); fitted = false;
     view.x = drag.vx + dx; view.y = drag.vy + dy; apply();
   } else if (drag.mode === 'move') {
     n.cx = drag.cx + dx / view.k; n.cy = drag.cy + dy / view.k; moveCard(n);
@@ -395,7 +460,7 @@ function endDrag(e) {
   svg.classList.remove('dragging'); ghost.style.display = 'none';
   nodes.forEach(m => m.el.classList.remove('drop'));
   if (!e) return;
-  if (!d.moved) return show(d.n || null);
+  if (!d.moved) return d.star ? toggleStar(d.n) : show(d.n || null);
   if (d.mode === 'move') { const p = loadPos(); p[d.n.id] = [Math.round(d.n.cx), Math.round(d.n.cy)]; storePos(p); }
   if (d.mode === 'link') { const t = cardAt(e); if (t && t !== d.n) linkPapers(d.n, t); }
 }
@@ -407,6 +472,7 @@ let sel = null;
 function reach(n, dir) {
   const seen = new Set([n]), used = new Set(), todo = [n];
   while (todo.length) for (const e of todo.pop()[dir]) {
+    if (!citesOn && e.kind === 'cites') continue;
     const m = dir === 'in' ? e.a : e.b;
     used.add(e);
     if (!seen.has(m)) { seen.add(m); todo.push(m); }
@@ -414,19 +480,21 @@ function reach(n, dir) {
   return [seen, used];
 }
 function update() {
-  const text = q.value.trim().toLowerCase(), tag = $('#tag').value;
-  const on = new Set([...document.querySelectorAll('#status [aria-pressed=true]')].map(b => b.dataset.s));
+  const text = q.value.trim().toLowerCase(), tag = $('#tag').value, starred = $('#starred').getAttribute('aria-pressed') === 'true';
   let lit = null, litEdges = null;
   if (sel) {
     const [up, ue] = reach(sel, 'in'), [down, de] = reach(sel, 'out');
     lit = new Set([...up, ...down]); litEdges = new Set([...ue, ...de]);
   }
   for (const n of nodes) {
-    n.pass = on.has(n.status) && (!tag || n.tags.includes(tag)) && (!text || n.hay.includes(text));
+    n.pass = (!starred || n.star) && (!tag || n.tags.includes(tag)) && (!text || n.hay.includes(text));
     n.el.classList.toggle('dim', !n.pass || (lit && !lit.has(n)));
     n.el.classList.toggle('sel', n === sel);
   }
-  for (const e of edges) e.el.classList.toggle('dim', !e.a.pass || !e.b.pass || (litEdges && !litEdges.has(e)));
+  for (const e of edges) {
+    e.el.classList.toggle('off', !citesOn && e.kind === 'cites');
+    e.el.classList.toggle('dim', !e.a.pass || !e.b.pass || (litEdges && !litEdges.has(e)));
+  }
 }
 q.addEventListener('input', update);
 q.addEventListener('keydown', e => {
@@ -435,9 +503,9 @@ q.addEventListener('keydown', e => {
   if (m) { show(m); focus(m); }
 });
 $('#tag').addEventListener('change', update);
-document.querySelectorAll('#status button').forEach(b => b.onclick = () => {
-  b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); update();
-});
+$('#starred').onclick = () => {
+  $('#starred').setAttribute('aria-pressed', $('#starred').getAttribute('aria-pressed') !== 'true'); update();
+};
 addEventListener('keydown', e => {
   if ($('#dlg').open || e.target.closest?.('textarea')) return;
   if (e.key === '/' && document.activeElement !== q) { e.preventDefault(); q.focus(); }
@@ -523,13 +591,12 @@ function show(n, {keep = false} = {}) {
   const kind = (es, k) => es.filter(e => e.kind === k);
   const [text, abstract] = notes(n);
   const authors = n.authors.length > 8 ? n.authors.slice(0, 8).join(', ') + `, +${n.authors.length - 8}` : n.authors.join(', ');
-  const status = EDIT
-    ? `<div class="seg small" role="group" aria-label="Status">${['queue', 'reading', 'read'].map(s =>
-        `<button data-act="status" data-s="${s}" aria-pressed="${n.status === s}"><i class="dot ${s === 'read' ? '' : s}"></i>${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}</div>`
-    : `<span class="pill ${n.status}">${n.status}</span>`;
+  const star = EDIT
+    ? `<button class="btn star" data-act="star" aria-pressed="${n.star}">${starIcon()}${n.star ? 'Starred' : 'Star'}</button>`
+    : n.star ? `<span class="pill">${starIcon()}Starred</span>` : '';
   panel.innerHTML = `
     <button class="close" data-act="close" aria-label="Close">&times;</button>
-    <div class="kicker">${status}<span>${esc(where(n))}${n.read ? ` · read ${esc(n.read)}` : ''}</span></div>
+    <div class="kicker">${star}<span>${esc(where(n))}</span></div>
     <h2>${esc(n.title)}</h2>
     <div class="authors">${esc(authors)}</div>
     <div class="links">${n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">${n.arxiv ? 'arXiv' : n.doi ? 'DOI' : 'Link'} &#8599;</a>` : ''}<code>${esc(n.id)}</code>${n.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}${EDIT ? '<button class="link-btn" data-act="details">Edit details</button>' : ''}</div>
@@ -551,7 +618,7 @@ panel.addEventListener('click', e => {
   const n = sel, d = t.dataset, from = byId[d.from], to = byId[d.to];
   if (d.go) { show(byId[d.go]); focus(byId[d.go]); }
   else if (d.act === 'close') show(null);
-  else if (d.act === 'status' && d.s !== n.status) api('set', {key: n.id, pairs: [`status=${d.s}`]});
+  else if (d.act === 'star') toggleStar(n);
   else if (d.act === 'edit') editSection(n, d.field);
   else if (d.act === 'cancel') show(n, {keep: true});
   else if (d.act === 'save') saveSection(n, d.field);
@@ -612,6 +679,7 @@ function ask({title, text = '', fields = [], ok = 'Save', danger = false}) {
     d.oncancel = e => { e.preventDefault(); done(null); };  // Esc
   });
 }
+const toggleStar = n => api('set', {key: n.id, pairs: [`star=${!n.star}`]});
 function editSection(n, f) {
   const s = panel.querySelector(`section[data-field="${f}"]`), [, secs] = sections(n);
   const [h, , text] = secs.find(x => x[1] === f);
@@ -685,11 +753,10 @@ async function remove(n) {
 async function addPaper() {
   const v = await ask({title: 'Add a paper', ok: 'Add', fields: [
     {name: 'q', label: 'arXiv id, DOI, URL or title', required: true, placeholder: '2503.11651'},
-    {name: 'status', label: 'Status', value: 'queue', options: [['queue', 'Queue'], ['reading', 'Reading'], ['read', 'Read']]},
     {name: 'tags', label: 'Tags, comma-separated', value: $('#tag').value}]});
   if (!v) return;
   toast('Fetching metadata…');
-  const j = await api('add', {q: v.q.trim(), status: v.status, tags: v.tags.split(',').map(s => s.trim()).filter(Boolean)});
+  const j = await api('add', {q: v.q.trim(), tags: v.tags.split(',').map(s => s.trim()).filter(Boolean)});
   if (j && byId[j.key]) focus(byId[j.key]);
 }
 if (EDIT) {

@@ -14,9 +14,9 @@ A paper library in plain text.
 ## Features
 
 - Add papers by arXiv id, DOI, URL or title. Metadata comes from arXiv, Semantic Scholar and Crossref, never from memory.
-- Notes are yours. They sit under the metadata with tags and reading status, and your agent leaves them alone unless you ask.
+- Notes are yours. They sit under the metadata with tags and a star, and your agent leaves them alone unless you ask.
 - Citations between your papers are fetched for you. `builds_on` links record your own view of where an idea came from.
-- A local lineage page lays papers out as generations of ideas. Edit notes and details in place, and drag one card onto another to link them.
+- A local lineage page lays each line of work out as generations of ideas, side by side; Arrange tidies it again after you drag cards around. Star papers, edit notes and details in place, and drag one card onto another to link them.
 - BibTeX for any set of papers.
 
 ## Install
@@ -57,15 +57,15 @@ short summary of what you changed.
 
 | Command | Does |
 |---|---|
-| `pp add <id>... [-s status] [-t tags]` | add papers by arXiv id, DOI, URL or title |
-| `pp ls [-s status] [-t tag]` | list papers |
+| `pp add <id>... [-s] [-t tags]` | add papers by arXiv id, DOI, URL or title; `-s` stars them |
+| `pp ls [-s] [-t tag]` | list papers; `-s` lists only starred ones |
 | `pp get <field> [key...]` | print `path`, `bib`, `url`, `notes` or any field; all papers if no key |
-| `pp set <key> field=value...` | `status=read`, `tags+=a,b`, `notes+=...`, `builds_on+=<key>` |
+| `pp set <key> field=value...` | `star=true`, `tags+=a,b`, `notes+=...`, `builds_on+=<key>` |
 | `pp mv <key> <new-key>` | rename a paper and every reference to it |
 | `pp link` | fetch citations between your papers and fill in venues |
 | `pp graph [-o file.html]` | serve the editable lineage page, or write a snapshot |
 
-Keys can be shortened to any unique part of the key or title (`vggt`). Status is `queue`, `reading` or `read`. A value of `-` is read from stdin. `pp -h` has the details.
+Keys can be shortened to any unique part of the key or title (`vggt`). A value of `-` is read from stdin. `pp -h` has the details.
 
 ## A paper
 
@@ -79,7 +79,7 @@ year: 2017
 venue: NeurIPS
 arxiv: "1706.03762"
 tags: [nlp]
-status: read
+star: true
 cites: [bahdanau2014neural]
 builds_on: [bahdanau2014neural]
 ---

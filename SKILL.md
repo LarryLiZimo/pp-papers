@@ -9,15 +9,15 @@ Every paper is `$PP_DIR/<key>.md` (default `~/papers`): YAML front matter (metad
 
 | Command | Does |
 |---|---|
-| `pp add <arxiv-id\|doi\|url\|title>... [-s queue\|reading\|read] [-t a,b]` | fetch metadata, create files, print keys (title and venue on stderr) |
-| `pp ls [-s status] [-t tag]` | TSV: key, year, status, tags, title (key order; pipe to `sort` / `grep`) |
+| `pp add <arxiv-id\|doi\|url\|title>... [-s] [-t a,b]` | fetch metadata, create files, print keys (title and venue on stderr); `-s` stars them |
+| `pp ls [-s] [-t tag]` | TSV: key, year, star (`*` or empty), tags, title (key order; pipe to `sort` / `grep`); `-s`: starred only |
 | `pp get <field> [key...]` | read `path`, `bib`, `url`, `notes`, `abstract`, `title`, `builds_on`, any field; no key = all papers |
 | `pp set <key> field=value...` | write fields (below); `-` as a value reads stdin |
 | `pp mv <key> <new-key>` | rename; references in other papers follow |
 | `pp link` | fetch citations between library papers; fill in published venue and year |
 | `pp graph` | serve the editable lineage page (blocks until Ctrl+C) |
 
-`set` forms: `status=read` (stamps the read date), `tags+=a,b`, `tags-=a`, `builds_on+=<key>,<key>`, `builds_on-=<key>`, `year=2017 venue=CVPR`, `notes+="a line"` (appends; a bare line becomes `- line`), `notes=-` (replace from stdin).
+`set` forms: `star=true` / `star=false`, `tags+=a,b`, `tags-=a`, `builds_on+=<key>,<key>`, `builds_on-=<key>`, `year=2017 venue=CVPR`, `notes+="a line"` (appends; a bare line becomes `- line`), `notes=-` (replace from stdin).
 
 ## Rules
 
@@ -30,7 +30,7 @@ Every paper is `$PP_DIR/<key>.md` (default `~/papers`): YAML front matter (metad
 
 ## "I read / finished X"
 
-1. `pp add <id> -s read [-t tags]`. If it says "already in library": `pp set <key> status=read`.
+1. `pp add <id> [-t tags]`, unless it is already in the library. Star it only if the user asks.
 2. `pp ls`, compare with the library, and propose `builds_on` links in both directions: `pp set <key> builds_on+=<older>` / `pp set <newer> builds_on+=<key>`.
 3. `pp link`. If it prints a `pp mv` hint (Semantic Scholar corrected the year in a key), apply it. An open lineage page picks up every change by itself.
 
@@ -38,11 +38,11 @@ Every paper is `$PP_DIR/<key>.md` (default `~/papers`): YAML front matter (metad
 
 | User wants | Do |
 |---|---|
-| Save for later | `pp add <id> -s queue` |
-| Started reading | `pp set <key> status=reading` |
+| Save for later | `pp add <id>` |
+| Star or unstar X | `pp set <key> star=true` / `star=false` |
 | "Note that ..." about a paper | `pp set <key> notes+="..."` in their words. The user may be editing the same notes in the page, so `pp get notes <key>` first before replacing them with `notes=-`. |
-| What have I read on X / where did I note X | `grep -ril "X" "${PP_DIR:-$HOME/papers}"`, then `pp get notes <keys>`; `pp ls -s read`, `pp ls -t <tag>` |
-| See or edit the lineage | Tell the user to run `pp graph`. It blocks, so don't run it in the foreground yourself; if asked, run it in the background. The page edits status, details and notes, adds, deletes and links papers (drag a card's dot onto another card: the older paper becomes the source, and Flip reverses it), and lets cards be dragged around. |
+| What have I read on X / where did I note X | `grep -ril "X" "${PP_DIR:-$HOME/papers}"`, then `pp get notes <keys>`; `pp ls -s` (starred), `pp ls -t <tag>` |
+| See or edit the lineage | Tell the user to run `pp graph`. It blocks, so don't run it in the foreground yourself; if asked, run it in the background. The page stars papers, edits details and notes, adds, deletes and links papers (drag a card's dot onto another card: the older paper becomes the source, and Flip reverses it), and lets cards be dragged around; Arrange lays them out again. |
 | BibTeX | `pp get bib <key>...`, or `pp get bib > refs.bib` for everything |
 
 ## When metadata is off

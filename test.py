@@ -26,7 +26,7 @@ S2_POINTNET = {"paperId": "d997", "title": "PointNet", "year": 2016, "abstract":
 
 
 def paper(key, title, year=2020, body="", **meta):
-    pp.save(key, {"title": title, "authors": ["Ada Lovelace"], "year": year, "tags": [], "status": "queue", **meta},
+    pp.save(key, {"title": title, "authors": ["Ada Lovelace"], "year": year, "tags": [], **meta},
             f"# {title}\n\n## Notes\n\n{body}\n## Abstract\n\nAn abstract.\n")
 
 
@@ -48,8 +48,8 @@ def run(fn, **kw):
 class Format(unittest.TestCase):
     def test_roundtrip(self):
         meta = {"title": "A: B #1", "authors": ["Charles R. Qi", "O'Brien, Jr."], "year": 2017, "venue": "会议: # not a comment",
-                "arxiv": "2001.01230", "doi": "10.1109/CVPR.2017.16", "tags": [], "status": "read",
-                "read": "2026-09-25", "cites": ["x2016y"], "builds_on": ["x2016y"]}
+                "arxiv": "2001.01230", "doi": "10.1109/CVPR.2017.16", "tags": [], "star": True,
+                "added": "2026-09-25", "cites": ["x2016y"], "builds_on": ["x2016y"]}
         self.assertEqual(pp.parse(pp.dump(meta, "# T\n\nbody\n")), (meta, "# T\n\nbody\n"))
 
     def test_hand_written_yaml(self):
@@ -126,11 +126,13 @@ class Library(unittest.TestCase):
 
     def test_fields(self):
         lib = pp.papers()
-        pp.assign("old2016base", ["tags=a,b", "tags+=c", "tags-=a", "status=read", "year=2017", "title=Renamed"], lib)
+        pp.assign("old2016base", ["tags=a,b", "tags+=c", "tags-=a", "star=true", "year=2017", "title=Renamed"], lib)
         m, body = pp.papers()["old2016base"]
-        self.assertEqual((m["tags"], m["status"], m["read"], m["year"]), (["b", "c"], "read", pp.TODAY, 2017))
+        self.assertEqual((m["tags"], m["star"], m["year"]), (["b", "c"], True, 2017))
         self.assertTrue(body.startswith("# Renamed\n"))
-        self.assertRaises(pp.Fail, pp.assign, "old2016base", ["status=done"], lib)
+        pp.assign("old2016base", ["star=false"], lib)
+        self.assertNotIn("star", pp.papers()["old2016base"][0])
+        self.assertRaises(pp.Fail, pp.assign, "old2016base", ["star=yes"], lib)
         self.assertRaises(pp.Fail, pp.assign, "old2016base", ["builds_on+=old"], lib)
 
     def test_builds_on(self):
@@ -155,11 +157,14 @@ class Library(unittest.TestCase):
         self.assertEqual(run(pp.cmd_get, field="title", keys=["old"]), "Base Method\n")
         self.assertEqual(run(pp.cmd_get, field="year", keys=[]), "new2020next\t2020\nold2016base\t2016\n")  # key order
         self.assertIn("@misc{old2016base,", run(pp.cmd_get, field="bib", keys=["old"]))
-        self.assertEqual(run(pp.cmd_ls, status=None, tag=None).splitlines()[1].split("\t")[:3],
-                         ["old2016base", "2016", "queue"])
+        pp.assign("old2016base", ["star=true"], pp.papers())
+        self.assertEqual(run(pp.cmd_ls, star=False, tag=None).splitlines()[1].split("\t")[:3],
+                         ["old2016base", "2016", "*"])
+        self.assertEqual(run(pp.cmd_ls, star=True, tag=None).split("\t")[0], "old2016base")
 
     def test_graph_data(self):
         g = pp.graph_data(pp.papers())
+        self.assertEqual([n["star"] for n in g["nodes"]], [False, False])
         self.assertEqual(sorted((e["kind"], e["from"], e["to"]) for e in g["edges"]),
                          [("builds_on", "old2016base", "new2020next"), ("cites", "old2016base", "new2020next")])
 
@@ -192,10 +197,23 @@ class Server(unittest.TestCase):
         code, res = self.req("/api/set", {"key": "old", "pairs": ["notes+=from the page"]})
         self.assertEqual(code, 200)
         self.assertEqual(pp.section(pp.papers()["old2016base"][1], "notes"), "- from the page")
-        self.assertEqual(self.req("/api/set", {"key": "nope", "pairs": ["status=read"]})[0], 400)
+        self.assertEqual(self.req("/api/set", {"key": "nope", "pairs": ["star=true"]})[0], 400)
+
+    def test_link_and_unlink(self):
+        body = lambda op: {"key": "new2020next", "pairs": [f"builds_on{op}=old2016base"]}
+        self.assertEqual(self.req("/api/set", body("-"))[0], 200)
+        self.assertNotIn("builds_on", pp.papers()["new2020next"][0])
+        self.assertEqual(self.req("/api/set", body("+"))[0], 200)
+        self.assertEqual(pp.papers()["new2020next"][0]["builds_on"], ["old2016base"])
+
+    def test_stale_code(self):  # pp was updated on disk after the server started: it stops writing
+        real, pp.code_version = pp.code_version, lambda: [0, 0]
+        try: self.assertEqual(self.req("/api/set", {"key": "old", "pairs": ["star=true"]})[0], 409)
+        finally: pp.code_version = real
+        self.assertNotIn("star", pp.papers()["old2016base"][0])
 
     def test_guards(self):
-        body = {"key": "old", "pairs": ["status=read"]}
+        body = {"key": "old", "pairs": ["star=true"]}
         self.assertEqual(self.req("/api/set", body, **{"Content-Type": "text/plain"})[0], 403)  # form-style CSRF
         self.assertEqual(self.req("/api/set", body, Origin="http://evil.example")[0], 403)
         self.assertEqual(self.req("/api/data", Host=f"evil.example:{self.port}")[0], 403)  # DNS rebinding

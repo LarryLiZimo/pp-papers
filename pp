@@ -12,16 +12,17 @@ for metadata, Markdown for your notes. Metadata is fetched from arXiv,
 Semantic Scholar and Crossref.
 
 commands:
-  add <arxiv-id|doi|url|title>...  fetch metadata, create files, print keys  [-s status] [-t tag,...]
-  ls                               list papers as TSV: key year status tags title  [-s status] [-t tag]
+  add <arxiv-id|doi|url|title>...  fetch metadata, create files, print keys  [-s] [-t tag,...]
+  ls                               list papers as TSV: key year star tags title  [-s] [-t tag]
   get <field> [key...]             print path, bib, url, notes, abstract or any front-matter field
-  set <key> <field=value>...       status=read  tags+=a,b  tags-=a  notes+=...  builds_on+=<key>
+  set <key> <field=value>...       star=true  tags+=a,b  tags-=a  notes+=...  builds_on+=<key>
   mv <key> <new-key>               rename a paper and every reference to it
   link                             fetch citations between your papers; fill in published venues
   graph                            serve the editable lineage page on 127.0.0.1  [-p port] [--no-open]
   graph -o <file.html>             write a read-only snapshot of it instead
 
 Keys can be abbreviated to any unique prefix or substring of the key or title.
+-s stars papers on `add` and lists only starred ones in `ls`.
 `get` without keys prints the field for every paper. A value of - is read from stdin.
 
 environment:
@@ -36,12 +37,11 @@ from html import unescape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 LIB = Path(os.environ.get("PP_DIR") or "~/papers").expanduser()
 TODAY = date.today().isoformat()
-STATUSES = ("queue", "reading", "read")
 ORDER = ("title", "authors", "year", "venue", "arxiv", "doi", "s2", "url",
-         "tags", "status", "added", "read", "cites", "builds_on")
+         "tags", "star", "added", "cites", "builds_on")
 TEXT = {"title", "venue", "arxiv", "doi", "s2", "url"}  # never read these as numbers
 SECTIONS = {"notes": "Notes"}  # body sections that `set` creates on demand
 UA = f"pp/{VERSION} (+https://github.com/LarryLiZimo/pp-papers)"
@@ -354,7 +354,7 @@ def fetch(query):
 
 # ---- operations, shared by the CLI and the web page
 
-def add(q, status, tags, lib):
+def add(q, star, tags, lib):
     rec = fetch(q)
     if not rec: die(f"{q}: not found (an arXiv id or DOI works best)")
     key = find_dup(rec, lib)
@@ -364,7 +364,7 @@ def add(q, status, tags, lib):
     key = make_key(rec, lib)
     meta = {f: rec.get(f) for f in ("title", "authors", "year", "venue", "arxiv", "doi")}
     if not (rec.get("arxiv") or rec.get("doi")): meta["s2"] = rec.get("s2")
-    meta.update(tags=list(tags), status=status, added=TODAY, read=TODAY if status == "read" else None)
+    meta.update(tags=list(tags), star=True if star else None, added=TODAY)
     body = f"# {rec['title']}\n\n## Notes\n\n"
     if rec.get("abstract"): body += f"\n## Abstract\n\n{rec['abstract']}\n"
     save(key, meta, body)
@@ -394,10 +394,11 @@ def assign(key, pairs, lib):
                 if key in items: die("a paper cannot build on itself")
             meta[f] = (list(dict.fromkeys(cur + items)) if op == "+"
                        else [x for x in cur if x not in items] if op == "-" else items)
+        elif f == "star":
+            if v not in ("true", "false"): die("star must be true or false")
+            meta[f] = True if v == "true" else None
         else:
-            if f == "status" and v not in STATUSES: die(f"status must be one of {', '.join(STATUSES)}")
             meta[f] = int(v) if f == "year" and v.isdigit() else v or None
-            if f == "status" and v == "read" and not meta.get("read"): meta["read"] = TODAY
             if f == "title" and v: body = re.sub(r"^# .*$", lambda _: "# " + v, body, count=1, flags=re.M)
     save(key, meta, body)
     lib[key] = (meta, body)
@@ -462,8 +463,7 @@ def graph_data(lib, base=None):
     nodes, edges = [], []
     for k, (m, body) in lib.items():
         nodes.append({"id": k, "title": str(m.get("title") or k), "authors": list(map(str, lst(m.get("authors")))),
-                      "year": year(m), "venue": str(m.get("venue") or ""), "read": m.get("read"),
-                      "status": m.get("status") if m.get("status") in STATUSES else "queue",
+                      "year": year(m), "venue": str(m.get("venue") or ""), "star": m.get("star") is True,
                       "tags": list(map(str, lst(m.get("tags")))), "url": url(m),
                       "arxiv": m.get("arxiv"), "doi": m.get("doi"), "body": body})
         edges += [{"from": c, "to": k, "kind": "cites"} for c in lst(m.get("cites")) if c in lib and c != k]
@@ -471,8 +471,15 @@ def graph_data(lib, base=None):
     return {"nodes": nodes, "edges": edges, "base": base}
 
 
-def page(data):
-    html = (Path(__file__).resolve().parent / "pp.html").read_text(encoding="utf-8")
+CODE = [Path(__file__).resolve(), Path(__file__).resolve().parent / "pp.html"]
+
+
+def code_version():  # changes when pp or its page is updated on disk
+    return [p.stat().st_mtime_ns for p in CODE]
+
+
+def page(data, html=None):
+    html = html or CODE[1].read_text(encoding="utf-8")
     return html.replace("/*DATA*/null", json.dumps(data, ensure_ascii=False).replace("</", "<\\/"))
 
 
@@ -493,8 +500,10 @@ def linked_files(lib):  # the only files the page may open: those your notes lin
 
 
 def make_server(port):
-    """A local server for the editable page. It reads the files on every request."""
+    """A local server for the editable page. It reads the paper files on every request."""
     lock = threading.Lock()  # one write at a time
+    # the page this code was written for; once pp is updated on disk, this server stops writing
+    html, version = CODE[1].read_text(encoding="utf-8"), code_version()
 
     class Handler(BaseHTTPRequestHandler):
         timeout = 30
@@ -520,7 +529,7 @@ def make_server(port):
             u = urllib.parse.urlparse(self.path)
             if u.path == "/":
                 data = dict(graph_data(papers()), editable=True, stamp=stamp())
-                return self.reply(200, page(data), "text/html; charset=utf-8")
+                return self.reply(200, page(data, html), "text/html; charset=utf-8")
             if u.path == "/api/data": return self.reply(200, graph_data(papers()))
             if u.path == "/api/stamp": return self.reply(200, {"stamp": stamp()})
             if u.path == "/file":
@@ -534,6 +543,9 @@ def make_server(port):
         def do_POST(self):
             if not self.trusted() or self.headers.get("Content-Type", "").split(";")[0] != "application/json":
                 return self.reply(403, {"error": "forbidden"})
+            if code_version() != version:  # old code could misread or damage files the new pp wrote
+                return self.reply(409, {"error": "pp was updated after `pp graph` started, so this page no longer "
+                                                 "saves changes. Restart it: Ctrl+C, then pp graph."})
             with lock: self.post()
 
         def post(self):
@@ -542,7 +554,7 @@ def make_server(port):
                 req = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
                 lib, key = papers(), req.get("key")
                 if self.path == "/api/add":
-                    key = add(req["q"], req.get("status", "queue"), req.get("tags", []), lib)
+                    key = add(req["q"], bool(req.get("star")), req.get("tags", []), lib)
                 elif self.path == "/api/set": assign(resolve(key, lib), req["pairs"], lib)
                 elif self.path == "/api/mv": rename(resolve(key, lib), req["new"], lib); key = req["new"]
                 elif self.path == "/api/rm": remove(resolve(key, lib), lib); key = None
@@ -577,15 +589,15 @@ def serve(port, open_browser):
 def cmd_add(a):
     lib, failed = papers(), 0
     for q in a.ids:
-        try: print(add(q, a.status, [t.strip() for t in a.tags.split(",") if t.strip()], lib))
+        try: print(add(q, a.star, [t.strip() for t in a.tags.split(",") if t.strip()], lib))
         except Fail as e: warn(str(e)); failed += 1
     return 1 if failed else 0
 
 
 def cmd_ls(a):  # key order, like ls; pipe through sort for anything else
     for k, (m, _) in papers().items():
-        if (a.status and m.get("status") != a.status) or (a.tag and a.tag not in lst(m.get("tags"))): continue
-        print("\t".join([k, str(year(m) or ""), str(m.get("status") or ""),
+        if (a.star and m.get("star") is not True) or (a.tag and a.tag not in lst(m.get("tags"))): continue
+        print("\t".join([k, str(year(m) or ""), "*" if m.get("star") is True else "",
                          ",".join(map(str, lst(m.get("tags")))), str(m.get("title") or "")]))
 
 
@@ -660,15 +672,15 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True, metavar="command")
     s = sub.add_parser("add", help="add papers by arXiv id, DOI, URL or title")
     s.add_argument("ids", nargs="+", metavar="id")
-    s.add_argument("-s", "--status", default="queue", choices=STATUSES)
+    s.add_argument("-s", "--star", action="store_true", help="star the papers")
     s.add_argument("-t", "--tags", default="", help="comma-separated")
     s = sub.add_parser("ls", help="list papers as TSV")
-    s.add_argument("-s", "--status", choices=STATUSES)
+    s.add_argument("-s", "--star", action="store_true", help="only starred papers")
     s.add_argument("-t", "--tag")
     s = sub.add_parser("get", help="print a field: path, bib, url, notes, title, ...")
     s.add_argument("field")
     s.add_argument("keys", nargs="*", metavar="key")
-    s = sub.add_parser("set", help="write fields: status=read tags+=x notes+=text builds_on+=<key>")
+    s = sub.add_parser("set", help="write fields: star=true tags+=x notes+=text builds_on+=<key>")
     s.add_argument("key")
     s.add_argument("pairs", nargs="+", metavar="field=value")
     s = sub.add_parser("mv", help="rename a paper and every reference to it")
